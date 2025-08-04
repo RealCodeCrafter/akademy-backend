@@ -15,12 +15,6 @@ export class Request {
   @Column()
   parentEmail: string;
 
-  @Column({ nullable: true }) 
-  childName: string;
-
-  @Column({ nullable: true }) 
-  childAge: number;
-
   @Column({ default: 'pending' })
   status: string;
 
