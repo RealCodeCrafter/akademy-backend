@@ -1,6 +1,5 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
-
 @Entity()
 export class Request {
   @PrimaryGeneratedColumn()
@@ -15,11 +14,17 @@ export class Request {
   @Column()
   parentEmail: string;
 
-  @Column({ nullable: true })
-  comment: string;
+  @Column()
+  childName: string;
+
+  @Column()
+  childAge: number;
 
   @Column({ default: 'pending' })
   status: string;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  createdAt: Date;
 
   @ManyToOne(() => User, (user) => user.requests, { nullable: true })
   user: User;

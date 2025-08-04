@@ -18,15 +18,26 @@ export class RequestsService {
   }
 
   async findAll() {
-    return this.requestsRepository.find({ relations: ['user'] });
+    return this.requestsRepository.find({
+      relations: ['user'],
+      order: { createdAt: 'ASC' },
+    });
   }
 
   async findAccepted() {
-    return this.requestsRepository.find({ where: { status: 'accepted' }, relations: ['user'] });
+    return this.requestsRepository.find({
+      where: { status: 'accepted' },
+      relations: ['user'],
+      order: { createdAt: 'ASC' },
+    });
   }
 
   async findOne(id: number) {
-    const request = await this.requestsRepository.findOne({ where: { id }, relations: ['user'] });
+    const request = await this.requestsRepository.findOne({
+      where: { id },
+      relations: ['user'],
+      order: { createdAt: 'ASC' },
+    });
     if (!request) {
       throw new NotFoundException(`Zayavka ID ${id} bilan topilmadi`);
     }
@@ -42,5 +53,11 @@ export class RequestsService {
       request.status = updateRequestDto.status;
     }
     return this.requestsRepository.save(request);
+  }
+
+  async delete(id: number) {
+    const request = await this.findOne(id);
+    await this.requestsRepository.delete(id);
+    return { message: `Zayavka ID ${id} o'chirildi` };
   }
 }

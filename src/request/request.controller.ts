@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, UseGuards, Put, Delete } from '@nestjs/common';
 import { RequestsService } from './request.service';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { UpdateRequestDto } from './dto/update-request.dto';
@@ -38,8 +38,15 @@ export class RequestsController {
 
   // @UseGuards(AuthGuard, RolesGuard)
   // @Roles('admin')
-  @Patch(':id')
+  @Put(':id')
   update(@Param('id') id: string, @Body() updateRequestDto: UpdateRequestDto) {
     return this.requestsService.update(+id, updateRequestDto);
+  }
+
+  // @UseGuards(AuthGuard, RolesGuard)
+  // @Roles('admin')
+  @Delete(':id')
+  delete(@Param('id') id: string) {
+    return this.requestsService.delete(+id);
   }
 }

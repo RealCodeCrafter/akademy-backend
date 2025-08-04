@@ -5,9 +5,10 @@ import { PurchasesController } from './purchases.controller';
 import { PurchasesService } from './purchases.service';
 import { UsersModule } from '../user/user.module';
 import { CoursesModule } from '../course/course.module';
+import { CategoryModule } from '../category/category.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Purchase]), UsersModule, CoursesModule],
+  imports: [TypeOrmModule.forFeature([Purchase]), UsersModule, CoursesModule, CategoryModule],
   controllers: [PurchasesController],
   providers: [PurchasesService],
 })

@@ -43,7 +43,11 @@ export class UsersService {
   }
 
   async findOne(id: number) {
-    const user = await this.usersRepository.findOne({ where: { id }, relations: ['purchases', 'requests'] });
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      relations: ['purchases', 'requests'],
+      order: { createdAt: 'ASC' },
+    });
     if (!user) {
       throw new NotFoundException(`Foydalanuvchi ID ${id} bilan topilmadi`);
     }
@@ -59,10 +63,19 @@ export class UsersService {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
     await this.usersRepository.update(id, updateUserDto);
-    return this.usersRepository.findOne({ where: { id } });
+    return this.findOne(id);
   }
 
   async findAll() {
-    return this.usersRepository.find({ relations: ['purchases', 'requests'] });
+    return this.usersRepository.find({
+      relations: ['purchases', 'requests'],
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async delete(id: number) {
+    const user = await this.findOne(id);
+    await this.usersRepository.delete(id);
+    return { message: `Foydalanuvchi ID ${id} o'chirildi` };
   }
 }

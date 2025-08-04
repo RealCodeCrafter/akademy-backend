@@ -1,11 +1,13 @@
-import { IsNumber, IsNotEmpty } from 'class-validator';
+import { IsNumber, IsOptional } from 'class-validator';
 
 export class CreatePurchaseDto {
   @IsNumber()
-  @IsNotEmpty()
   userId: number;
 
   @IsNumber()
-  @IsNotEmpty()
   courseId: number;
+
+  @IsNumber()
+  @IsOptional()
+  categoryId?: number;
 }
