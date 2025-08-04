@@ -15,10 +15,10 @@ export class Request {
   @Column()
   parentEmail: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true }) 
   childName: string;
 
-  @Column()
+  @Column({ nullable: true }) 
   childAge: number;
 
   @Column({ default: 'pending' })
