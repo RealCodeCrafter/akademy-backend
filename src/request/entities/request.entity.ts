@@ -14,6 +14,9 @@ export class Request {
 
   @Column()
   parentEmail: string;
+  
+  @Column({ nullable: true })
+  comment: string;
 
   @Column({ default: 'pending' })
   status: string;
