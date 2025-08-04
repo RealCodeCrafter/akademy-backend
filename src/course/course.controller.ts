@@ -1,16 +1,11 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete } from '@nestjs/common';
 import { CoursesService } from './course.service';
 import { CreateCourseDto } from './dto/create-course.dto';
-import { AuthGuard } from '../auth/auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
 
 @Controller('courses')
 export class CoursesController {
   constructor(private coursesService: CoursesService) {}
 
-  // @UseGuards(AuthGuard, RolesGuard)
-  // @Roles('admin')
   @Post()
   create(@Body() createCourseDto: CreateCourseDto) {
     return this.coursesService.create(createCourseDto);
@@ -31,8 +26,6 @@ export class CoursesController {
     return this.coursesService.findCategories(+id);
   }
 
-  // @UseGuards(AuthGuard, RolesGuard)
-  // @Roles('admin')
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.coursesService.delete(+id);

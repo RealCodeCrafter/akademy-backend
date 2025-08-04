@@ -1,17 +1,35 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Course } from "./entities/course.entity";
+import { Course } from './entities/course.entity';
 import { CreateCourseDto } from './dto/create-course.dto';
+import { Category } from '../category/entities/cateogry.entity';
+
 @Injectable()
 export class CoursesService {
   constructor(
     @InjectRepository(Course)
     private coursesRepository: Repository<Course>,
+    @InjectRepository(Category)
+    private categoryRepository: Repository<Category>,
   ) {}
 
   async create(createCourseDto: CreateCourseDto) {
-    const course = this.coursesRepository.create(createCourseDto);
+    const { name, categoryIds } = createCourseDto;
+    const course = this.coursesRepository.create({ name });
+
+    if (categoryIds && categoryIds.length > 0) {
+      const categories = await this.categoryRepository.find({
+        where: categoryIds.map(id => ({ id })),
+      });
+
+      if (categories.length !== categoryIds.length) {
+        throw new NotFoundException('Ba\'zi kategoriyalar topilmadi');
+      }
+
+      course.categories = categories;
+    }
+
     return this.coursesRepository.save(course);
   }
 
