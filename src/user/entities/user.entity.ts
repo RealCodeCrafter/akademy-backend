@@ -1,6 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
-import { Purchase } from '../../purchases/entities/purchase.entity';
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
 import { Request } from '../../request/entities/request.entity';
+import { Purchase } from '../../purchases/entities/purchase.entity';
 
 @Entity()
 export class User {
@@ -13,8 +13,11 @@ export class User {
   @Column()
   password: string;
 
-  @Column({ nullable: true })
+  @Column()
   email: string;
+
+  @Column({ default: 'user' })
+  role: string;
 
   @Column({ nullable: true })
   parentName: string;
@@ -22,15 +25,36 @@ export class User {
   @Column({ nullable: true })
   parentPhone: string;
 
-  @Column({ default: 'user' })
-  role: string;
+  @Column({ nullable: true })
+  parentSurname: string;
 
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  createdAt: Date;
+  @Column({ nullable: true })
+  parentPatronymic: string;
+
+  @Column({ nullable: true })
+  parentAddress: string;
+
+  @Column({ nullable: true })
+  studentName: string;
+
+  @Column({ nullable: true })
+  studentSurname: string;
+
+  @Column({ nullable: true })
+  studentPatronymic: string;
+
+  @Column({ nullable: true })
+  studentAddress: string;
+
+  @Column({ nullable: true })
+  studentBirthDate: string;
 
   @OneToMany(() => Purchase, (purchase) => purchase.user)
   purchases: Purchase[];
 
   @OneToMany(() => Request, (request) => request.user)
   requests: Request[];
+  
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  createdAt: Date;
 }
