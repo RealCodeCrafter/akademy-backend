@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Payment } from './entities/payment.entity';
@@ -31,7 +31,7 @@ export class PaymentsService {
       const bankCode = this.configService.get<string>('TOCHKA_BANK_CODE') || '044525104';
       if (!customerCode || !bankCode) {
         this.logger.error('TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE .env faylida topilmadi');
-        throw new Error('TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE topilmadi');
+        throw new BadRequestException('TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE topilmadi');
       }
 
       this.logger.log(`Tochka API customer ma'lumotlari so'ralmoqda: https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`);
@@ -40,7 +40,18 @@ export class PaymentsService {
         {
           headers: { Authorization: `Bearer ${token}` },
         },
-      );
+      ).catch(err => {
+        if (err.response?.status === 403) {
+          this.logger.error('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak');
+          throw new UnauthorizedException('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak');
+        }
+        if (err.response?.status === 401) {
+          this.logger.error('Token yaroqsiz yoki muddati tugagan');
+          throw new UnauthorizedException('Token yaroqsiz yoki muddati tugagan');
+        }
+        throw err;
+      });
+
       this.logger.log(`Customer javobi: ${JSON.stringify(customersResponse.data)}`);
       const customerData = customersResponse.data.Data;
       if (customerData.customerType !== 'Business') {
@@ -48,10 +59,17 @@ export class PaymentsService {
         throw new NotFoundException('Business customer topilmadi');
       }
 
-      this.logger.log('Tochka API merchants malumotlari soralmoqda: https://enter.tochka.com/uapi/sbp/v1.0/merchants');
+      this.logger.log('Tochka API merchants ma\'lumotlari so\'ralmoqda: https://enter.tochka.com/uapi/sbp/v1.0/merchants');
       const retailersResponse = await axios.get('https://enter.tochka.com/uapi/sbp/v1.0/merchants', {
         headers: { Authorization: `Bearer ${token}` },
+      }).catch(err => {
+        if (err.response?.status === 403) {
+          this.logger.error('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak');
+          throw new UnauthorizedException('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak');
+        }
+        throw err;
       });
+
       this.logger.log(`Merchants javobi: ${JSON.stringify(retailersResponse.data)}`);
       const merchantId = retailersResponse.data.Data?.Merchants?.find(
         (r: any) => r.status === 'REG' && r.isActive,
@@ -64,7 +82,7 @@ export class PaymentsService {
       return { customerCode: customerData.customerCode, merchantId };
     } catch (err) {
       this.logger.error(`Tochka API xatosi: ${err.message}, status: ${err.response?.status}, response: ${JSON.stringify(err.response?.data)}`);
-      throw new Error(`Tochka API xatosi: ${err.message}`);
+      throw new BadRequestException(`Tochka API xatosi: ${err.message}`);
     }
   }
 
@@ -113,7 +131,7 @@ export class PaymentsService {
     const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
     if (!token) {
       this.logger.error('Tochka JWT token topilmadi');
-      throw new Error('Tochka JWT token topilmadi');
+      throw new BadRequestException('Tochka JWT token topilmadi');
     }
 
     const { customerCode, merchantId } = await this.getCustomerAndMerchantData(token);
@@ -139,7 +157,14 @@ export class PaymentsService {
             'Content-Type': 'application/json',
           },
         },
-      );
+      ).catch(err => {
+        if (err.response?.status === 403) {
+          this.logger.error('Token ruxsatlari yetarli emas: MakeAcquiringOperation ruxsati kerak');
+          throw new UnauthorizedException('Token ruxsatlari yetarli emas: MakeAcquiringOperation ruxsati kerak');
+        }
+        throw err;
+      });
+
       this.logger.log(`To‘lov havolasi yaratildi: paymentId=${savedPayment.id}, paymentUrl=${paymentResponse.data.Data.paymentLink}`);
       return {
         paymentUrl: paymentResponse.data.Data.paymentLink,
@@ -148,7 +173,7 @@ export class PaymentsService {
       };
     } catch (err) {
       this.logger.error(`To‘lov havolasi yaratishda xato: ${err.message}, status: ${err.response?.status}, response: ${JSON.stringify(err.response?.data)}`);
-      throw new Error(`To‘lov havolasi yaratishda xato: ${err.message}`);
+      throw new BadRequestException(`To‘lov havolasi yaratishda xato: ${err.message}`);
     }
   }
 
@@ -162,14 +187,14 @@ export class PaymentsService {
 
     let publicKey: string;
     try {
-      publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY') || "";
+      publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY') || '';
       if (!publicKey) {
         this.logger.error('Tochka public key .env faylida topilmadi');
-        throw new Error('Tochka public key .env faylida topilmadi');
+        throw new BadRequestException('Tochka public key .env faylida topilmadi');
       }
     } catch (err) {
-      this.logger.error('Tochka public key o‘qishda xato: ' + err.message);
-      throw new Error('Tochka public key o‘qishda xato: ' + err.message);
+      this.logger.error(`Tochka public key o‘qishda xato: ${err.message}`);
+      throw new BadRequestException(`Tochka public key o‘qishda xato: ${err.message}`);
     }
 
     let decoded: any;
@@ -177,8 +202,8 @@ export class PaymentsService {
       decoded = jwt.verify(callbackData, publicKey, { algorithms: ['RS256'] });
       this.logger.log(`Webhook JWT muvaffaqiyatli tekshirildi: event=${decoded.event}`);
     } catch (err) {
-      this.logger.error('Webhook JWT tekshiruvi xato: ' + err.message);
-      throw new Error('Webhook JWT tekshiruvi xato: ' + err.message);
+      this.logger.error(`Webhook JWT tekshiruvi xato: ${err.message}`);
+      throw new BadRequestException(`Webhook JWT tekshiruvi xato: ${err.message}`);
     }
 
     const { event, data } = decoded;
@@ -191,23 +216,25 @@ export class PaymentsService {
         throw new NotFoundException('To‘lov topilmadi');
       }
 
-      if (data.status === 'APPROVED') {
+      // JSON fayldagi PaymentStatusEnum ga moslashtirish
+      if (data.status === 'Accepted') {
         payment.status = 'completed';
         await this.paymentRepository.save(payment);
         await this.purchasesService.confirmPurchase(payment.purchaseId);
         this.logger.log(`To‘lov tasdiqlandi: paymentId=${payment.id}`);
-      } else if (['DECLINED', 'CANCELLED', 'TIMEOUT', 'ERROR'].includes(data.status)) {
+      } else if (['Rejected', 'DECLINED', 'CANCELLED', 'TIMEOUT', 'ERROR'].includes(data.status)) {
         payment.status = 'failed';
         await this.paymentRepository.save(payment);
         this.logger.log(`To‘lov rad etildi: paymentId=${payment.id}, status=${data.status}`);
       } else {
         this.logger.warn(`Noma’lum to‘lov statusi: ${data.status}`);
+        throw new BadRequestException(`Noma’lum to‘lov statusi: ${data.status}`);
       }
 
       return { status: 'OK' };
     }
 
-    this.logger.error('Noma’lum webhook event turi: ' + event);
-    throw new Error('Noma’lum webhook event turi');
+    this.logger.error(`Noma’lum webhook event turi: ${event}`);
+    throw new BadRequestException(`Noma’lum webhook event turi: ${event}`);
   }
 }
