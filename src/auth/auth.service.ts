@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../user/user.service';
 import { CreateAuthDto } from './dto/create-auth.dto';
@@ -13,15 +18,52 @@ export class AuthService {
   ) {}
 
   async register(createAuthDto: CreateAuthDto) {
+    const existingUser = await this.usersService.findByUsernameOrEmail(
+      createAuthDto.username,
+      createAuthDto.email,
+    );
+    if (existingUser) {
+      throw new BadRequestException('Bu username yoki email allaqachon mavjud');
+    }
+
     const user = await this.usersService.create({
       ...createAuthDto,
       role: createAuthDto.role || 'user',
     });
+
     const payload = { username: user.username, sub: user.id, role: user.role };
     return {
       access_token: this.jwtService.sign(payload),
-      user: { id: user.id, username: user.username, email: user.email, role: user.role },
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      },
       message: 'Foydalanuvchi muvaffaqiyatli ro‘yxatdan o‘tdi',
+    };
+  }
+
+  async addAdmin(createAuthDto: CreateAuthDto) {
+    const existingUser = await this.usersService.findByUsernameOrEmail(
+      createAuthDto.username,
+      createAuthDto.email,
+    );
+    if (existingUser) {
+      throw new BadRequestException('Bu username yoki email allaqachon mavjud');
+    }
+
+    const user = await this.usersService.create({
+      ...createAuthDto,
+      role: 'admin',
+    });
+
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      message: 'Admin muvaffaqiyatli qo‘shildi',
     };
   }
 
@@ -30,29 +72,25 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('Foydalanuvchi topilmadi');
     }
-    const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
+
+    const isPasswordValid = await bcrypt.compare(
+      loginDto.password,
+      user.password,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Noto‘g‘ri parol');
     }
+
     const payload = { username: user.username, sub: user.id, role: user.role };
     return {
       access_token: this.jwtService.sign(payload),
-      user: { id: user.id, username: user.username, email: user.email, role: user.role },
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      },
       message: 'Kirish muvaffaqiyatli amalga oshirildi',
-    };
-  }
-
-  async addAdmin(createAuthDto: CreateAuthDto) {
-    const user = await this.usersService.create({
-      ...createAuthDto,
-      role: 'admin',
-    });
-    return {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-      message: 'Admin muvaffaqiyatli qo‘shildi',
     };
   }
 }

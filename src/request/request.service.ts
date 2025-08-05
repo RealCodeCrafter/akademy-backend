@@ -32,6 +32,15 @@ export class RequestsService {
     });
   }
 
+  async findPending() {
+  return this.requestsRepository.find({
+    where: { status: 'pending' },
+    relations: ['user'],
+    order: { createdAt: 'ASC' },
+  });
+}
+
+
   async findOne(id: number) {
     const request = await this.requestsRepository.findOne({
       where: { id },

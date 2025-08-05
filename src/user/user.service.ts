@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
@@ -16,31 +16,55 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto) {
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-    const user = this.usersRepository.create({
-      ...createUserDto,
-      password: hashedPassword,
-    });
-    return this.usersRepository.save(user);
+  
+  const existingUser = await this.usersRepository.findOne({
+    where: { username: createUserDto.username },
+  });
+
+  if (existingUser) {
+    throw new BadRequestException('Bu username bilan foydalanuvchi allaqachon mavjud');
   }
 
+  const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+
+  const user = this.usersRepository.create({
+    ...createUserDto,
+    password: hashedPassword,
+  });
+
+  return this.usersRepository.save(user);
+}
+
   async createFromRequest(requestId: number, createUserDto: CreateUserDto) {
-    const request = await this.requestsService.findOne(requestId);
-    if (request.status !== 'accepted') {
-      throw new NotFoundException('Faqat qabul qilingan zayavkadan foydalanuvchi yaratish mumkin');
-    }
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-    const user = this.usersRepository.create({
-      ...createUserDto,
-      password: hashedPassword,
-      email: createUserDto.email || request.parentEmail,
-      parentName: request.parentName,
-      parentPhone: request.parentPhone,
-    });
-    const savedUser = await this.usersRepository.save(user);
-    await this.requestsService.update(requestId, { user: savedUser });
-    return savedUser;
+  const request = await this.requestsService.findOne(requestId);
+
+  if (request.status !== 'accepted') {
+    throw new NotFoundException('Faqat qabul qilingan zayavkadan foydalanuvchi yaratish mumkin');
   }
+
+  const existingUser = await this.usersRepository.findOne({
+    where: { username: createUserDto.username },
+  });
+
+  if (existingUser) {
+    throw new Error('Bu username bilan foydalanuvchi allaqachon mavjud');
+  }
+
+  const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+  const user = this.usersRepository.create({
+    ...createUserDto,
+    password: hashedPassword,
+    email: createUserDto.email || request.parentEmail,
+    parentName: request.parentName,
+    parentPhone: request.parentPhone,
+  });
+
+  const savedUser = await this.usersRepository.save(user);
+  await this.requestsService.update(requestId, { user: savedUser });
+
+  return savedUser;
+}
+
 
   async findOne(id: number) {
     const user = await this.usersRepository.findOne({
@@ -78,4 +102,14 @@ export class UsersService {
     await this.usersRepository.delete(id);
     return { message: `Foydalanuvchi ID ${id} o'chirildi` };
   }
+
+  async findByUsernameOrEmail(username: string, email: string) {
+  return this.usersRepository.findOne({
+    where: [
+      { username },
+      { email },
+    ],
+  });
+}
+
 }

@@ -49,4 +49,12 @@ export class RequestsController {
   delete(@Param('id') id: string) {
     return this.requestsService.delete(+id);
   }
+
+  // @UseGuards(AuthGuard, RolesGuard)
+// @Roles('admin')
+  @Get('pending')
+  findPending() {
+    return this.requestsService.findPending();
+  }
+
 }

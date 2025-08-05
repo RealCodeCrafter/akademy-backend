@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Course } from './entities/course.entity';
@@ -15,23 +15,28 @@ export class CoursesService {
   ) {}
 
   async create(createCourseDto: CreateCourseDto) {
-    const { name, categoryIds } = createCourseDto;
-    const course = this.coursesRepository.create({ name });
+  const { name, categoryIds } = createCourseDto;
+  const existingCourse = await this.coursesRepository.findOne({ where: { name } });
+  if (existingCourse) {
+    throw new BadRequestException(`"${name}" nomli kurs allaqachon mavjud`);
+  }
+  const course = this.coursesRepository.create({ name });
 
-    if (categoryIds && categoryIds.length > 0) {
-      const categories = await this.categoryRepository.find({
-        where: categoryIds.map(id => ({ id })),
-      });
+  if (categoryIds && categoryIds.length > 0) {
+    const categories = await this.categoryRepository.find({
+      where: categoryIds.map(id => ({ id })),
+    });
 
-      if (categories.length !== categoryIds.length) {
-        throw new NotFoundException('Ba\'zi kategoriyalar topilmadi');
-      }
-
-      course.categories = categories;
+    if (categories.length !== categoryIds.length) {
+      throw new NotFoundException('Ba\'zi kategoriyalar topilmadi');
     }
 
-    return this.coursesRepository.save(course);
+    course.categories = categories;
   }
+
+  return this.coursesRepository.save(course);
+}
+
 
   async findAll() {
     return this.coursesRepository.find({
