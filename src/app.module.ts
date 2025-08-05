@@ -13,11 +13,12 @@ import { PaymentModule } from './payment/payment.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env',
     }),
     TypeOrmModule.forRootAsync({
-  imports: [ConfigModule],
-  inject: [ConfigService],
-  useFactory: (config: ConfigService) => ({
+    imports: [ConfigModule],
+    inject: [ConfigService],
+    useFactory: (config: ConfigService) => ({
     type: 'postgres',
     host: config.get<string>('DB_HOST') ?? 'localhost',
     port: parseInt(config.get<string>('DB_PORT') ?? '5432', 10),
@@ -40,5 +41,9 @@ import { PaymentModule } from './payment/payment.module';
     CategoryModule,
     PaymentModule
   ],
+  
 })
+
+
 export class AppModule {}
+
