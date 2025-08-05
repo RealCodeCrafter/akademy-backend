@@ -146,7 +146,7 @@ export class PaymentsService {
     });
 
     const savedPayment = await this.paymentRepository.save(payment);
-    this.logger.log(`To‘lov yaratildi: paymentId=${savedPayment.id}`);
+    this.logger.log(`To‘lov yaratildi: paymentId=${savedPayment.id}, transactionId=${transactionId}`);
 
     const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
     if (!token) {
@@ -166,6 +166,7 @@ export class PaymentsService {
         paymentUrl: `https://test.pay.tochka.com/mock_payment_${transactionId}`,
         paymentId: savedPayment.id,
         purchaseId: purchase.id,
+        transactionId, // transactionId ni javobda qaytarish
       };
     }
 
@@ -208,6 +209,7 @@ export class PaymentsService {
         paymentUrl: paymentResponse.data.Data.paymentLink,
         paymentId: savedPayment.id,
         purchaseId: purchase.id,
+        transactionId,
       };
     } catch (err) {
       this.logger.error(`To‘lov havolasi yaratishda xato: ${err.message}, status: ${err.response?.status}, response: ${JSON.stringify(err.response?.data)}`);
@@ -265,11 +267,18 @@ export class PaymentsService {
     if (event === 'acquiringInternetPayment') {
       const payment = await this.paymentRepository.findOne({
         where: { transactionId: data.operationId },
-        relations: ['purchase'], // purchase aloqasini yuklash
+        relations: ['purchase', 'purchase.user', 'purchase.course', 'purchase.category'],
       });
       if (!payment) {
         this.logger.error(`To‘lov topilmadi: operationId=${data.operationId}`);
         throw new NotFoundException('To‘lov topilmadi');
+      }
+
+      this.logger.log(`To‘lov topildi: paymentId=${payment.id}, purchaseId=${payment.purchaseId}, purchase=${JSON.stringify(payment.purchase)}`);
+
+      if (!payment.purchase) {
+        this.logger.error(`Xarid topilmadi: purchaseId=${payment.purchaseId}`);
+        throw new NotFoundException(`Xarid topilmadi: purchaseId=${payment.purchaseId}`);
       }
 
       if (data.status === 'Accepted') {

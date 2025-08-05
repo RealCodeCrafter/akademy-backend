@@ -34,5 +34,5 @@ export class Purchase {
   course: Course;
 
   @OneToMany(() => Payment, (payment) => payment.purchase)
-payments: Payment[];
+  payments: Payment[];
 }
