@@ -27,7 +27,7 @@ export class PaymentsService {
 
   async getCustomerAndMerchantData(token: string) {
     const isTestModeRaw = this.configService.get<string>('IS_TEST_MODE');
-    const isTestMode = isTestModeRaw === 'true'
+    const isTestMode = isTestModeRaw === 'true';
     this.logger.log(`IS_TEST_MODE qiymati: ${isTestModeRaw}, parse qilingan: ${isTestMode}`);
 
     const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
@@ -243,7 +243,7 @@ export class PaymentsService {
     if (isTestMode) {
       this.logger.warn('Test rejimi yoqilgan: Webhook JWT tekshiruvi o‘tkazib yuborilmoqda');
       try {
-        decoded = JSON.parse(callbackData); // Test uchun oddiy JSON parsing
+        decoded = JSON.parse(callbackData);
         this.logger.log(`Test rejimida webhook ma'lumotlari: ${JSON.stringify(decoded)}`);
       } catch (err) {
         this.logger.error(`Test rejimida webhook JSON parsing xatosi: ${err.message}`);
@@ -260,9 +260,12 @@ export class PaymentsService {
     }
 
     const { event, data } = decoded;
+    this.logger.log(`Webhook event: ${event}, data: ${JSON.stringify(data)}`);
+
     if (event === 'acquiringInternetPayment') {
       const payment = await this.paymentRepository.findOne({
         where: { transactionId: data.operationId },
+        relations: ['purchase'], // purchase aloqasini yuklash
       });
       if (!payment) {
         this.logger.error(`To‘lov topilmadi: operationId=${data.operationId}`);
@@ -273,17 +276,17 @@ export class PaymentsService {
         payment.status = 'completed';
         await this.paymentRepository.save(payment);
         await this.purchasesService.confirmPurchase(payment.purchaseId);
-        this.logger.log(`To‘lov tasdiqlandi: paymentId=${payment.id}`);
+        this.logger.log(`To‘lov tasdiqlandi: paymentId=${payment.id}, purchaseId=${payment.purchaseId}`);
+        return { status: 'OK' };
       } else if (['Rejected', 'DECLINED', 'CANCELLED', 'TIMEOUT', 'ERROR'].includes(data.status)) {
         payment.status = 'failed';
         await this.paymentRepository.save(payment);
         this.logger.log(`To‘lov rad etildi: paymentId=${payment.id}, status=${data.status}`);
+        return { status: 'OK' };
       } else {
         this.logger.warn(`Noma’lum to‘lov statusi: ${data.status}`);
         throw new BadRequestException(`Noma’lum to‘lov statusi: ${data.status}`);
       }
-
-      return { status: 'OK' };
     }
 
     this.logger.error(`Noma’lum webhook event turi: ${event}`);

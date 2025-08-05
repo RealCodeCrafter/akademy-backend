@@ -35,6 +35,8 @@ export class PaymentsController {
       this.logger.error('callbackData parametri taqdim etilmadi');
       throw new BadRequestException('callbackData parametri taqdim etilmadi');
     }
-    return this.paymentsService.handleCallback(callbackData);
+    const result = await this.paymentsService.handleCallback(callbackData);
+    this.logger.log(`PaymentsService.handleCallback javobi: ${JSON.stringify(result)}`);
+    return result;
   }
 }
