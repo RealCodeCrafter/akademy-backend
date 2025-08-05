@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
+import { Purchase } from '../../purchases/entities/purchase.entity';
 
 @Entity()
 export class Payment {
@@ -12,7 +13,7 @@ export class Payment {
   @Column()
   transactionId: string;
 
-  @Column()
+  @Column({ type: 'enum', enum: ['pending', 'completed', 'failed'], default: 'pending' })
   status: 'pending' | 'completed' | 'failed';
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
@@ -23,4 +24,7 @@ export class Payment {
 
   @Column()
   purchaseId: number;
+
+  @ManyToOne(() => Purchase, (purchase) => purchase.payments)
+  purchase: Purchase;
 }

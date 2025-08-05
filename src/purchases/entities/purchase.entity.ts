@@ -1,7 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { Course } from '../../course/entities/course.entity';
 import { Category } from '../../category/entities/cateogry.entity';
+import { Payment } from 'src/payment/entities/payment.entity';
 
 @Entity()
 export class Purchase {
@@ -31,4 +32,7 @@ export class Purchase {
 
   @ManyToOne(() => Course, (course) => course.purchases)
   course: Course;
+
+  @OneToMany(() => Payment, (payment) => payment.purchase)
+payments: Payment[];
 }

@@ -8,6 +8,5 @@ export class CreatePaymentDto {
   categoryId: number;
 
   @IsString()
-  @IsIn(['Beginner', 'Intermediate', 'Advanced'])
   degree: string;
 }

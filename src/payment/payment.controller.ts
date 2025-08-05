@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards, UnauthorizedException } from '@nestjs/common';
 import { PaymentsService } from './payment.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { AuthGuard } from '../auth/auth.guard';
@@ -17,13 +17,13 @@ export class PaymentsController {
   startPayment(@Body() createPaymentDto: CreatePaymentDto, @Req() req: AuthenticatedRequest) {
     const userId = req.user?.sub;
     if (!userId) {
-      throw new Error('Foydalanuvchi aniqlanmadi');
+      throw new UnauthorizedException('Foydalanuvchi aniqlanmadi');
     }
     return this.paymentsService.startPayment(createPaymentDto, userId);
   }
 
   @Post('callback')
-  handleCallback(@Body() callbackData: any) {
+  handleCallback(@Body('callbackData') callbackData: string) {
     return this.paymentsService.handleCallback(callbackData);
   }
 }
