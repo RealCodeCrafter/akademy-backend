@@ -1,6 +1,6 @@
 import { IsNumber, IsString, IsIn } from 'class-validator';
 
-export class CreatePurchaseDto {
+export class CreatePaymentDto {
   @IsNumber()
   courseId: number;
 

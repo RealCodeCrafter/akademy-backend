@@ -1,6 +1,7 @@
 import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
 import { Request } from '../../request/entities/request.entity';
 import { Purchase } from '../../purchases/entities/purchase.entity';
+import { Payment } from '../../payment/entities/payment.entity';
 
 @Entity()
 export class User {
@@ -54,7 +55,10 @@ export class User {
 
   @OneToMany(() => Request, (request) => request.user)
   requests: Request[];
-  
+
+  @OneToMany(() => Payment, (payment) => payment.user)
+  payments: Payment[];
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 }

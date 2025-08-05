@@ -3,7 +3,6 @@ import { User } from '../../user/entities/user.entity';
 import { Course } from '../../course/entities/course.entity';
 import { Category } from '../../category/entities/cateogry.entity';
 
-
 @Entity()
 export class Purchase {
   @PrimaryGeneratedColumn()
@@ -14,9 +13,15 @@ export class Purchase {
 
   @Column()
   price: number;
-  
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
+
+  @Column()
+  degree: string;
+
+  @Column({ default: 'pending' })
+  status: 'pending' | 'paid' | 'failed';
 
   @ManyToOne(() => Category, { nullable: true })
   category: Category;
