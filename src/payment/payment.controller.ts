@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Req, UseGuards, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { PaymentsService } from './payment.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { AuthGuard } from '../auth/auth.guard';
@@ -24,6 +24,9 @@ export class PaymentsController {
 
   @Post('callback')
   handleCallback(@Body('callbackData') callbackData: string) {
+    if (!callbackData) {
+      throw new BadRequestException('callbackData parametri taqdim etilmadi');
+    }
     return this.paymentsService.handleCallback(callbackData);
   }
 }
