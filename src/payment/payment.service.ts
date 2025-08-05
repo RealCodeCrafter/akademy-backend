@@ -26,14 +26,26 @@ export class PaymentsService {
   ) {}
 
   async getCustomerAndMerchantData(token: string) {
-    try {
-      const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
-      const bankCode = this.configService.get<string>('TOCHKA_BANK_CODE') || '044525104';
-      if (!customerCode || !bankCode) {
-        this.logger.error('TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE .env faylida topilmadi');
-        throw new BadRequestException('TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE topilmadi');
-      }
+    const isTestMode = this.configService.get<boolean>('IS_TEST_MODE') === true;
+    const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
+    const bankCode = this.configService.get<string>('TOCHKA_BANK_CODE') || '044525104';
+    const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID');
 
+    if (!customerCode || !bankCode) {
+      this.logger.error('TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE .env faylida topilmadi');
+      throw new BadRequestException('TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE topilmadi');
+    }
+
+    if (isTestMode) {
+      this.logger.warn('Test rejimi yoqilgan: customerCode va merchantId .env dan olinmoqda');
+      if (!merchantId) {
+        this.logger.error('Test rejimida TOCHKA_MERCHANT_ID .env faylida bo‘lishi kerak');
+        throw new BadRequestException('Test rejimida TOCHKA_MERCHANT_ID .env faylida bo‘lishi kerak');
+      }
+      return { customerCode, merchantId };
+    }
+
+    try {
       this.logger.log(`Tochka API customer ma'lumotlari so'ralmoqda: https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`);
       const customersResponse = await axios.get(
         `https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`,
@@ -42,12 +54,16 @@ export class PaymentsService {
         },
       ).catch(err => {
         if (err.response?.status === 403) {
-          this.logger.error('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak');
+          this.logger.error('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak. Dokumentatsiyani tekshiring: https://enter.tochka.com/doc/v2/redoc');
           throw new UnauthorizedException('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak');
         }
         if (err.response?.status === 401) {
           this.logger.error('Token yaroqsiz yoki muddati tugagan');
           throw new UnauthorizedException('Token yaroqsiz yoki muddati tugagan');
+        }
+        if (err.response?.status === 404) {
+          this.logger.error(`Customer topilmadi: customerCode=${customerCode}, bankCode=${bankCode}`);
+          throw new NotFoundException('Customer topilmadi');
         }
         throw err;
       });
@@ -71,15 +87,15 @@ export class PaymentsService {
       });
 
       this.logger.log(`Merchants javobi: ${JSON.stringify(retailersResponse.data)}`);
-      const merchantId = retailersResponse.data.Data?.Merchants?.find(
+      const merchant = retailersResponse.data.Data?.Merchants?.find(
         (r: any) => r.status === 'REG' && r.isActive,
-      )?.merchantId;
-      if (!merchantId) {
+      );
+      if (!merchant?.merchantId) {
         this.logger.error('Faol merchantId topilmadi');
         throw new NotFoundException('Faol merchantId topilmadi');
       }
 
-      return { customerCode: customerData.customerCode, merchantId };
+      return { customerCode: customerData.customerCode, merchantId: merchant.merchantId };
     } catch (err) {
       this.logger.error(`Tochka API xatosi: ${err.message}, status: ${err.response?.status}, response: ${JSON.stringify(err.response?.data)}`);
       throw new BadRequestException(`Tochka API xatosi: ${err.message}`);
@@ -87,7 +103,7 @@ export class PaymentsService {
   }
 
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
-    this.logger.log(`To‘lov boshlanmoqda: userId=${userId}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}`);
+    this.logger.log(`To‘lov boshlanmoqda: userId=${userId}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, degree=${createPaymentDto.degree}`);
 
     const user = await this.usersService.findOne(userId);
     if (!user) {
@@ -123,6 +139,7 @@ export class PaymentsService {
       status: 'pending',
       user,
       purchaseId: purchase.id,
+      purchase,
     });
 
     const savedPayment = await this.paymentRepository.save(payment);
@@ -134,7 +151,17 @@ export class PaymentsService {
       throw new BadRequestException('Tochka JWT token topilmadi');
     }
 
+    const isTestMode = this.configService.get<boolean>('IS_TEST_MODE') === true;
     const { customerCode, merchantId } = await this.getCustomerAndMerchantData(token);
+
+    if (isTestMode) {
+      this.logger.warn('Test rejimi yoqilgan: Mock to‘lov havolasi qaytarilmoqda');
+      return {
+        paymentUrl: `https://test.pay.tochka.com/mock_payment_${transactionId}`,
+        paymentId: savedPayment.id,
+        purchaseId: purchase.id,
+      };
+    }
 
     try {
       this.logger.log('Tochka API payment-links endpointiga so‘rov yuborilmoqda: https://enter.tochka.com/uapi/sbp/v1.0/payment-links');
@@ -145,7 +172,7 @@ export class PaymentsService {
           currency: 'RUB',
           customerCode,
           merchantId,
-          description: `Kurs: ${course.name}, Kategoriya: ${category.name}`,
+          description: `Kurs: ${course.name}, Kategoriya: ${category.name}, Daraja: ${createPaymentDto.degree}`,
           successUrl: 'https://aplusacademy.ru/success',
           failUrl: 'https://aplusacademy.ru/fail',
           orderId: transactionId,
@@ -155,12 +182,17 @@ export class PaymentsService {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
+            'CustomerCode': customerCode,
           },
         },
       ).catch(err => {
         if (err.response?.status === 403) {
-          this.logger.error('Token ruxsatlari yetarli emas: MakeAcquiringOperation ruxsati kerak');
+          this.logger.error('Token ruxsatlari yetarli emas: MakeAcquiringOperation ruxsati kerak. Dokumentatsiyani tekshiring: https://enter.tochka.com/doc/v2/redoc');
           throw new UnauthorizedException('Token ruxsatlari yetarli emas: MakeAcquiringOperation ruxsati kerak');
+        }
+        if (err.response?.status === 400) {
+          this.logger.error(`So'rov body formati noto'g'ri: ${JSON.stringify(err.response.data)}`);
+          throw new BadRequestException(`So'rov body formati noto'g'ri: ${err.message}`);
         }
         throw err;
       });
@@ -198,12 +230,24 @@ export class PaymentsService {
     }
 
     let decoded: any;
-    try {
-      decoded = jwt.verify(callbackData, publicKey, { algorithms: ['RS256'] });
-      this.logger.log(`Webhook JWT muvaffaqiyatli tekshirildi: event=${decoded.event}`);
-    } catch (err) {
-      this.logger.error(`Webhook JWT tekshiruvi xato: ${err.message}`);
-      throw new BadRequestException(`Webhook JWT tekshiruvi xato: ${err.message}`);
+    const isTestMode = this.configService.get<boolean>('IS_TEST_MODE') === true;
+    if (isTestMode) {
+      this.logger.warn('Test rejimi yoqilgan: Webhook JWT tekshiruvi o‘tkazib yuborilmoqda');
+      try {
+        decoded = JSON.parse(callbackData); // Test uchun oddiy JSON parsing
+        this.logger.log(`Test rejimida webhook ma'lumotlari: ${JSON.stringify(decoded)}`);
+      } catch (err) {
+        this.logger.error(`Test rejimida webhook JSON parsing xatosi: ${err.message}`);
+        throw new BadRequestException(`Test rejimida webhook JSON parsing xatosi: ${err.message}`);
+      }
+    } else {
+      try {
+        decoded = jwt.verify(callbackData, publicKey, { algorithms: ['RS256'] });
+        this.logger.log(`Webhook JWT muvaffaqiyatli tekshirildi: event=${decoded.event}`);
+      } catch (err) {
+        this.logger.error(`Webhook JWT tekshiruvi xato: ${err.message}`);
+        throw new BadRequestException(`Webhook JWT tekshiruvi xato: ${err.message}`);
+      }
     }
 
     const { event, data } = decoded;
@@ -216,7 +260,6 @@ export class PaymentsService {
         throw new NotFoundException('To‘lov topilmadi');
       }
 
-      // JSON fayldagi PaymentStatusEnum ga moslashtirish
       if (data.status === 'Accepted') {
         payment.status = 'completed';
         await this.paymentRepository.save(payment);
