@@ -27,8 +27,10 @@ import { PaymentModule } from './payment/payment.module';
     database: config.get<string>('DB_NAME') ?? 'test',
     synchronize: true,
     autoLoadEntities: true,
+
     ssl: {
       rejectUnauthorized: false,
+
     },
   }),
 }),
