@@ -26,7 +26,10 @@ export class PaymentsService {
   ) {}
 
   async getCustomerAndMerchantData(token: string) {
-    const isTestMode = this.configService.get<boolean>('IS_TEST_MODE') === true;
+    const isTestModeRaw = this.configService.get<string>('IS_TEST_MODE');
+    const isTestMode = isTestModeRaw === 'true'
+    this.logger.log(`IS_TEST_MODE qiymati: ${isTestModeRaw}, parse qilingan: ${isTestMode}`);
+
     const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
     const bankCode = this.configService.get<string>('TOCHKA_BANK_CODE') || '044525104';
     const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID');
@@ -151,8 +154,11 @@ export class PaymentsService {
       throw new BadRequestException('Tochka JWT token topilmadi');
     }
 
-    const isTestMode = this.configService.get<boolean>('IS_TEST_MODE') === true;
     const { customerCode, merchantId } = await this.getCustomerAndMerchantData(token);
+
+    const isTestModeRaw = this.configService.get<string>('IS_TEST_MODE');
+    const isTestMode = isTestModeRaw === 'true';
+    this.logger.log(`startPayment: IS_TEST_MODE qiymati: ${isTestModeRaw}, parse qilingan: ${isTestMode}`);
 
     if (isTestMode) {
       this.logger.warn('Test rejimi yoqilgan: Mock to‘lov havolasi qaytarilmoqda');
@@ -230,7 +236,10 @@ export class PaymentsService {
     }
 
     let decoded: any;
-    const isTestMode = this.configService.get<boolean>('IS_TEST_MODE') === true;
+    const isTestModeRaw = this.configService.get<string>('IS_TEST_MODE');
+    const isTestMode = isTestModeRaw === 'true';
+    this.logger.log(`handleCallback: IS_TEST_MODE qiymati: ${isTestModeRaw}, parse qilingan: ${isTestMode}`);
+
     if (isTestMode) {
       this.logger.warn('Test rejimi yoqilgan: Webhook JWT tekshiruvi o‘tkazib yuborilmoqda');
       try {
