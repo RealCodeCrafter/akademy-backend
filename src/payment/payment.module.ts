@@ -10,6 +10,7 @@ import { CoursesModule } from '../course/course.module';
 import { CategoryModule } from '../category/category.module';
 import { PurchasesModule } from '../purchases/purchases.module';
 import { PaymentsCronService } from './payments-cron.service';
+import { LevelModule } from 'src/level/level.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -22,6 +23,7 @@ import { PaymentsCronService } from './payments-cron.service';
     CoursesModule,
     CategoryModule,
     PurchasesModule,
+    LevelModule
   ],
   controllers: [PaymentsController],
   providers: [PaymentsService, PaymentsCronService],

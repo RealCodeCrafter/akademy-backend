@@ -45,6 +45,17 @@ export class CategoryService {
     }
     return category;
   }
+  async getLevelsByCategory(categoryId: number) {
+    const category = await this.categoryRepository.findOne({
+      where: { id: categoryId },
+      relations: ['levels'],
+    });
+    if (!category) {
+      throw new NotFoundException(`Kategoriya ID ${categoryId} bilan topilmadi`);
+    }
+    return category.levels || [];
+  }
+  
 
   async isLevelLinkedToCategory(categoryId: number, levelId: number) {
     const category = await this.categoryRepository.findOne({

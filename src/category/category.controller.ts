@@ -10,6 +10,11 @@ export class CategoryController {
   create(@Body() createCategoryDto: CreateCategoryDto) {
     return this.categoryService.create(createCategoryDto);
   }
+  
+   @Get(':id/levels')
+  async getLevelsByCategory(@Param('id') id: string) {
+    return this.categoryService.getLevelsByCategory(+id);
+  }
 
   @Get()
   findAll() {
