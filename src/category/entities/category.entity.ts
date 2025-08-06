@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToMany, JoinTable } from 'typeorm';
 import { Course } from '../../course/entities/course.entity';
 import { Level } from '../../level/entities/level.entity';
 
@@ -20,5 +20,6 @@ export class Category {
   courses: Course[];
 
   @ManyToMany(() => Level, (level) => level.categories)
-  levels: Level[];
+  @JoinTable()
+levels: Level[];
 }

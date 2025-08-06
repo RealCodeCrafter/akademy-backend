@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToMany, JoinTable } from 'typeorm';
 import { Purchase } from '../../purchases/entities/purchase.entity';
-import { Category } from '../../category/entities/cateogry.entity';
+import { Category } from '../../category/entities/category.entity';
 import { UserCourse } from '../../user-course/entities/user-course.entity';
 
 @Entity()

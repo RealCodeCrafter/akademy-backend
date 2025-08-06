@@ -1,5 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from 'typeorm';
-import { Category } from '../../category/entities/cateogry.entity';
+import { Category } from '../../category/entities/category.entity';
 
 @Entity()
 export class Level {
@@ -12,6 +12,6 @@ export class Level {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @ManyToMany(() => Category, (category) => category.levels)
-  categories: Category[];
+ @ManyToMany(() => Category, (category) => category.levels)
+categories: Category[];
 }
