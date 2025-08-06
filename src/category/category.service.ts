@@ -12,21 +12,21 @@ export class CategoryService {
   ) {}
 
   async create(createCategoryDto: CreateCategoryDto) {
-  const existingCategory = await this.categoryRepository.findOne({
-    where: { name: createCategoryDto.name },
-  });
+    const existingCategory = await this.categoryRepository.findOne({
+      where: { name: createCategoryDto.name },
+    });
 
-  if (existingCategory) {
-    throw new BadRequestException(`"${createCategoryDto.name}" nomli kategoriya allaqachon mavjud`);
+    if (existingCategory) {
+      throw new BadRequestException(`"${createCategoryDto.name}" nomli kategoriya allaqachon mavjud`);
+    }
+
+    const category = this.categoryRepository.create(createCategoryDto);
+    return this.categoryRepository.save(category);
   }
-
-  const category = this.categoryRepository.create(createCategoryDto);
-  return this.categoryRepository.save(category);
-}
 
   async findAll() {
     return this.categoryRepository.find({
-      relations: ['courses'],
+      relations: ['courses', 'levels'],
       order: { createdAt: 'ASC' },
     });
   }
@@ -34,13 +34,24 @@ export class CategoryService {
   async findOne(id: number) {
     const category = await this.categoryRepository.findOne({
       where: { id },
-      relations: ['courses'],
+      relations: ['courses', 'levels'],
       order: { createdAt: 'ASC' },
     });
     if (!category) {
       throw new NotFoundException(`Kategoriya ID ${id} bilan topilmadi`);
     }
     return category;
+  }
+
+  async isLevelLinkedToCategory(categoryId: number, levelId: number) {
+    const category = await this.categoryRepository.findOne({
+      where: { id: categoryId },
+      relations: ['levels'],
+    });
+    if (!category) {
+      throw new NotFoundException(`Kategoriya ID ${categoryId} bilan topilmadi`);
+    }
+    return category.levels.some(level => level.id === levelId);
   }
 
   async delete(id: number) {

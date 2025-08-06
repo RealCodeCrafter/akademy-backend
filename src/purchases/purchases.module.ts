@@ -7,9 +7,10 @@ import { UsersModule } from '../user/user.module';
 import { CoursesModule } from '../course/course.module';
 import { CategoryModule } from '../category/category.module';
 import { UserCourseModule } from 'src/user-course/user-course.module';
+import { LevelModule } from 'src/level/level.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Purchase]), UsersModule, CoursesModule, CategoryModule, UserCourseModule],
+  imports: [TypeOrmModule.forFeature([Purchase]), UsersModule, CoursesModule, CategoryModule, UserCourseModule, LevelModule],
   controllers: [PurchasesController],
   providers: [PurchasesService],
   exports: [PurchasesService]

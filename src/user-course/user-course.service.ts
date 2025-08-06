@@ -15,7 +15,7 @@ export class UserCourseService {
     private courseRepository: Repository<Course>,
   ) {}
 
-  async assignCourseToUser(userId: number, courseId: number) {
+  async assignCourseToUser(userId: number, courseId: number, degree: string) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException(`Foydalanuvchi ID ${userId} bilan topilmadi`);
@@ -39,6 +39,7 @@ export class UserCourseService {
     const userCourse = this.userCourseRepository.create({
       user,
       course,
+      degree,
       expiresAt,
     });
 
@@ -70,6 +71,7 @@ export class UserCourseService {
           price: category.price,
         })),
       },
+      degree: userCourse.degree,
       expiresAt: userCourse.expiresAt,
       createdAt: userCourse.createdAt,
     }));

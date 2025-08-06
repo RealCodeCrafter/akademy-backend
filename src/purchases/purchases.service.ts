@@ -7,6 +7,7 @@ import { UsersService } from '../user/user.service';
 import { CoursesService } from '../course/course.service';
 import { CategoryService } from '../category/category.service';
 import { UserCourseService } from '../user-course/user-course.service';
+import { LevelService } from '../level/level.service';
 
 @Injectable()
 export class PurchasesService {
@@ -17,6 +18,7 @@ export class PurchasesService {
     private coursesService: CoursesService,
     private categoryService: CategoryService,
     private userCourseService: UserCourseService,
+    private levelService: LevelService,
   ) {}
 
   async create(createPurchaseDto: CreatePurchaseDto, userId: number) {
@@ -40,6 +42,21 @@ export class PurchasesService {
       throw new NotFoundException(`Ushbu kursga bu kategoriya tegishli emas`);
     }
 
+    let degree: string;
+    if (createPurchaseDto.levelId) {
+      const level = await this.levelService.findOne(createPurchaseDto.levelId);
+      if (!level) {
+        throw new NotFoundException(`Daraja topilmadi`);
+      }
+      const isLevelLinked = await this.categoryService.isLevelLinkedToCategory(createPurchaseDto.categoryId, createPurchaseDto.levelId);
+      if (!isLevelLinked) {
+        throw new BadRequestException(`Ushbu daraja bu kategoriyaga tegishli emas`);
+      }
+      degree = level.name;
+    } else {
+      degree = category.name; // Exams kabi kategoriyalar uchun
+    }
+
     const existingUserCourse = await this.userCourseService.findUserCourse(userId, createPurchaseDto.courseId);
     if (existingUserCourse && existingUserCourse.expiresAt > new Date()) {
       throw new BadRequestException(`Foydalanuvchi ushbu kursga allaqachon ega va muddati hali tugamagan`);
@@ -48,7 +65,7 @@ export class PurchasesService {
     const purchase = this.purchasesRepository.create({
       purchaseDate: new Date(),
       price: category.price,
-      degree: createPurchaseDto.degree,
+      degree,
       status: 'pending',
       user,
       course,
@@ -101,7 +118,7 @@ export class PurchasesService {
 
     const existingUserCourse = await this.userCourseService.findUserCourse(purchase.user.id, purchase.course.id);
     if (!existingUserCourse || existingUserCourse.expiresAt <= new Date()) {
-      await this.userCourseService.assignCourseToUser(purchase.user.id, purchase.course.id);
+      await this.userCourseService.assignCourseToUser(purchase.user.id, purchase.course.id, purchase.degree);
     }
 
     return {

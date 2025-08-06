@@ -10,6 +10,7 @@ import { CategoryModule } from './category/category.module';
 import { PaymentModule } from './payment/payment.module';
 import { UserCourseModule } from './user-course/user-course.module';
 import { UserDocumentModule } from './user-document/user-document.module';
+import { LevelModule } from './level/level.module';
 
 @Module({
   imports: [
@@ -45,7 +46,8 @@ import { UserDocumentModule } from './user-document/user-document.module';
     CategoryModule,
     PaymentModule,
     UserCourseModule,
-    UserDocumentModule
+    UserDocumentModule,
+    LevelModule
   ],
   
 })

@@ -1,4 +1,4 @@
-import { IsNumber, IsString, IsIn } from 'class-validator';
+import { IsNumber, IsOptional } from 'class-validator';
 
 export class CreatePurchaseDto {
   @IsNumber()
@@ -7,7 +7,7 @@ export class CreatePurchaseDto {
   @IsNumber()
   categoryId: number;
 
-  @IsString()
-  @IsIn(['Beginner', 'Intermediate', 'Advanced'])
-  degree: string;
+  @IsNumber()
+  @IsOptional()
+  levelId?: number;
 }

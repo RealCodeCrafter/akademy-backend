@@ -13,6 +13,9 @@ export class UserCourse {
   @ManyToOne(() => Course, (course) => course.userCourses)
   course: Course;
 
+  @Column({default: "unknown"})
+  degree: string;
+
   @Column({ type: 'timestamp' })
   expiresAt: Date;
 
