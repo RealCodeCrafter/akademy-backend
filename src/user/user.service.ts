@@ -16,60 +16,77 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto) {
-  
-  const existingUser = await this.usersRepository.findOne({
-    where: { username: createUserDto.username },
-  });
+    const existingUser = await this.usersRepository.findOne({
+      where: { username: createUserDto.username },
+    });
 
-  if (existingUser) {
-    throw new BadRequestException('Bu username bilan foydalanuvchi allaqachon mavjud');
+    if (existingUser) {
+      throw new BadRequestException('Bu username bilan foydalanuvchi allaqachon mavjud');
+    }
+
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+
+    const user = this.usersRepository.create({
+      ...createUserDto,
+      password: hashedPassword,
+    });
+
+    return this.usersRepository.save(user);
   }
-
-  const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-
-  const user = this.usersRepository.create({
-    ...createUserDto,
-    password: hashedPassword,
-  });
-
-  return this.usersRepository.save(user);
-}
 
   async createFromRequest(requestId: number, createUserDto: CreateUserDto) {
-  const request = await this.requestsService.findOne(requestId);
+    const request = await this.requestsService.findOne(requestId);
 
-  if (request.status !== 'accepted') {
-    throw new NotFoundException('Faqat qabul qilingan zayavkadan foydalanuvchi yaratish mumkin');
+    if (request.status !== 'accepted') {
+      throw new NotFoundException('Faqat qabul qilingan zayavkadan foydalanuvchi yaratish mumkin');
+    }
+
+    const existingUser = await this.usersRepository.findOne({
+      where: { username: createUserDto.username },
+    });
+
+    if (existingUser) {
+      throw new BadRequestException('Bu username bilan foydalanuvchi allaqachon mavjud');
+    }
+
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    const user = this.usersRepository.create({
+      ...createUserDto,
+      password: hashedPassword,
+      email: createUserDto.email || request.parentEmail,
+      parentName: request.parentName,
+      parentPhone: request.parentPhone,
+    });
+
+    const savedUser = await this.usersRepository.save(user);
+    await this.requestsService.update(requestId, { user: savedUser });
+
+    return savedUser;
   }
 
-  const existingUser = await this.usersRepository.findOne({
-    where: { username: createUserDto.username },
-  });
+  async createAdminUser(createUserDto: CreateUserDto) {
+    const existingUser = await this.usersRepository.findOne({
+      where: [{ username: createUserDto.username }, { email: createUserDto.email }],
+    });
 
-  if (existingUser) {
-    throw new Error('Bu username bilan foydalanuvchi allaqachon mavjud');
+    if (existingUser) {
+      throw new BadRequestException('Bu username yoki email bilan foydalanuvchi allaqachon mavjud');
+    }
+
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    const user = this.usersRepository.create({
+      ...createUserDto,
+      password: hashedPassword,
+      role: createUserDto.role || 'user',
+    });
+
+    return this.usersRepository.save(user);
   }
-
-  const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-  const user = this.usersRepository.create({
-    ...createUserDto,
-    password: hashedPassword,
-    email: createUserDto.email || request.parentEmail,
-    parentName: request.parentName,
-    parentPhone: request.parentPhone,
-  });
-
-  const savedUser = await this.usersRepository.save(user);
-  await this.requestsService.update(requestId, { user: savedUser });
-
-  return savedUser;
-}
-
 
   async findOne(id: number) {
     const user = await this.usersRepository.findOne({
       where: { id },
-      relations: ['purchases', 'requests'],
+      relations: ['purchases', 'requests', 'userCourses', 'documents'],
       order: { createdAt: 'ASC' },
     });
     if (!user) {
@@ -92,7 +109,7 @@ export class UsersService {
 
   async findAll() {
     return this.usersRepository.find({
-      relations: ['purchases', 'requests'],
+      relations: ['purchases', 'requests', 'userCourses', 'documents'],
       order: { createdAt: 'ASC' },
     });
   }
@@ -104,12 +121,8 @@ export class UsersService {
   }
 
   async findByUsernameOrEmail(username: string, email: string) {
-  return this.usersRepository.findOne({
-    where: [
-      { username },
-      { email },
-    ],
-  });
-}
-
+    return this.usersRepository.findOne({
+      where: [{ username }, { email }],
+    });
+  }
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Purchase } from './entities/purchase.entity';
@@ -6,43 +6,37 @@ import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { UsersService } from '../user/user.service';
 import { CoursesService } from '../course/course.service';
 import { CategoryService } from '../category/category.service';
+import { UserCourseService } from '../user-course/user-course.service';
 
 @Injectable()
 export class PurchasesService {
-  private readonly logger = new Logger(PurchasesService.name);
-
   constructor(
     @InjectRepository(Purchase)
     private purchasesRepository: Repository<Purchase>,
     private usersService: UsersService,
     private coursesService: CoursesService,
     private categoryService: CategoryService,
+    private userCourseService: UserCourseService,
   ) {}
 
   async create(createPurchaseDto: CreatePurchaseDto, userId: number) {
-    this.logger.log(`Xarid yaratilmoqda: userId=${userId}, courseId=${createPurchaseDto.courseId}, categoryId=${createPurchaseDto.categoryId}`);
-    
     const user = await this.usersService.findOne(userId);
     if (!user) {
-      this.logger.error(`Foydalanuvchi topilmadi: userId=${userId}`);
       throw new NotFoundException(`Foydalanuvchi topilmadi`);
     }
 
     const course = await this.coursesService.findOne(createPurchaseDto.courseId);
     if (!course) {
-      this.logger.error(`Kurs topilmadi: courseId=${createPurchaseDto.courseId}`);
       throw new NotFoundException(`Kurs topilmadi`);
     }
 
     const category = await this.categoryService.findOne(createPurchaseDto.categoryId);
     if (!category) {
-      this.logger.error(`Kategoriya topilmadi: categoryId=${createPurchaseDto.categoryId}`);
       throw new NotFoundException(`Kategoriya topilmadi`);
     }
 
     const isCategoryLinked = course.categories?.some(cat => cat.id === category.id);
     if (!isCategoryLinked) {
-      this.logger.error(`Ushbu kursga bu kategoriya tegishli emas: courseId=${createPurchaseDto.courseId}, categoryId=${createPurchaseDto.categoryId}`);
       throw new NotFoundException(`Ushbu kursga bu kategoriya tegishli emas`);
     }
 
@@ -57,7 +51,6 @@ export class PurchasesService {
     });
 
     const saved = await this.purchasesRepository.save(purchase);
-    this.logger.log(`Xarid yaratildi: purchaseId=${saved.id}`);
 
     return {
       id: saved.id,
@@ -86,25 +79,22 @@ export class PurchasesService {
   }
 
   async confirmPurchase(purchaseId: number) {
-    this.logger.log(`Xarid tasdiqlanmoqda: purchaseId=${purchaseId}`);
-
     const purchase = await this.purchasesRepository.findOne({
       where: { id: purchaseId },
       relations: ['user', 'course', 'category'],
     });
     if (!purchase) {
-      this.logger.error(`Xarid topilmadi: purchaseId=${purchaseId}`);
       throw new NotFoundException(`Xarid topilmadi`);
     }
 
     if (!purchase.user || !purchase.course || !purchase.category) {
-      this.logger.error(`Xarid ma'lumotlari to'liq emas: user=${!!purchase.user}, course=${!!purchase.course}, category=${!!purchase.category}`);
       throw new NotFoundException(`Xarid ma'lumotlari to'liq emas`);
     }
 
     purchase.status = 'paid';
     const saved = await this.purchasesRepository.save(purchase);
-    this.logger.log(`Xarid tasdiqlandi: purchaseId=${saved.id}`);
+
+    await this.userCourseService.assignCourseToUser(purchase.user.id, purchase.course.id);
 
     return {
       id: saved.id,
@@ -200,12 +190,10 @@ export class PurchasesService {
   async delete(id: number) {
     const purchase = await this.purchasesRepository.findOne({ where: { id } });
     if (!purchase) {
-      this.logger.error(`Xarid topilmadi: id=${id}`);
       throw new NotFoundException(`Xarid topilmadi`);
     }
 
     await this.purchasesRepository.delete(id);
-    this.logger.log(`Xarid o‘chirildi: id=${id}`);
     return { message: `Xarid o‘chirildi` };
   }
 }

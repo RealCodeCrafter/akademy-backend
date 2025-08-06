@@ -8,6 +8,8 @@ import { CoursesModule } from './course/course.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { CategoryModule } from './category/category.module';
 import { PaymentModule } from './payment/payment.module';
+import { UserCourseModule } from './user-course/user-course.module';
+import { UserDocumentModule } from './user-document/user-document.module';
 
 @Module({
   imports: [
@@ -41,11 +43,15 @@ import { PaymentModule } from './payment/payment.module';
     CoursesModule,
     PurchasesModule,
     CategoryModule,
-    PaymentModule
+    PaymentModule,
+    UserCourseModule,
+    UserDocumentModule
   ],
   
 })
 
 
 export class AppModule {}
+
+
 
