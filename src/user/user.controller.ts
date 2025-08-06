@@ -2,10 +2,14 @@ import { Controller, Get, Post, Body, Param, Delete, UseGuards } from '@nestjs/c
 import { UsersService } from './user.service';
 import { CreateUserDto } from '../auth/dto/create-user.dto';
 import { AuthGuard } from '../auth/auth.guard';
+import { UserCourseService } from '../user-course/user-course.service';
 
 @Controller('users')
 export class UsersController {
-  constructor(private usersService: UsersService) {}
+  constructor(
+    private usersService: UsersService,
+    private userCourseService: UserCourseService,
+  ) {}
 
   // @UseGuards(AuthGuard)
   @Post()
@@ -28,7 +32,7 @@ export class UsersController {
   // @UseGuards(AuthGuard)
   @Get(':id/courses')
   findUserCourses(@Param('id') id: string) {
-    return this.usersService.findOne(+id).then(user => user.userCourses);
+    return this.userCourseService.findUserCourses(+id);
   }
 
   // @UseGuards(AuthGuard)
