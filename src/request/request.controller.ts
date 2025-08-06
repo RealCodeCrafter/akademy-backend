@@ -29,6 +29,23 @@ export class RequestsController {
     return this.requestsService.findAccepted();
   }
 
+  
+
+  // @UseGuards(AuthGuard, RolesGuard)
+// @Roles('admin')
+  @Get('pending')
+  findPending() {
+    return this.requestsService.findPending();
+  }
+  
+  // @UseGuards(AuthGuard, RolesGuard)
+  // @Roles('admin')
+  @Put(':id')
+  update(@Param('id') id: string, @Body() updateRequestDto: UpdateRequestDto) {
+    return this.requestsService.update(+id, updateRequestDto);
+  }
+
+  
   // @UseGuards(AuthGuard, RolesGuard)
   // @Roles('admin')
   @Get(':id')
@@ -38,23 +55,9 @@ export class RequestsController {
 
   // @UseGuards(AuthGuard, RolesGuard)
   // @Roles('admin')
-  @Put(':id')
-  update(@Param('id') id: string, @Body() updateRequestDto: UpdateRequestDto) {
-    return this.requestsService.update(+id, updateRequestDto);
-  }
-
-  // @UseGuards(AuthGuard, RolesGuard)
-  // @Roles('admin')
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.requestsService.delete(+id);
-  }
-
-  // @UseGuards(AuthGuard, RolesGuard)
-// @Roles('admin')
-  @Get('pending')
-  findPending() {
-    return this.requestsService.findPending();
   }
 
 }
