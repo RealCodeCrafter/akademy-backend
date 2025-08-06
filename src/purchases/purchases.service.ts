@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Purchase } from './entities/purchase.entity';
@@ -38,6 +38,11 @@ export class PurchasesService {
     const isCategoryLinked = course.categories?.some(cat => cat.id === category.id);
     if (!isCategoryLinked) {
       throw new NotFoundException(`Ushbu kursga bu kategoriya tegishli emas`);
+    }
+
+    const existingUserCourse = await this.userCourseService.findUserCourse(userId, createPurchaseDto.courseId);
+    if (existingUserCourse && existingUserCourse.expiresAt > new Date()) {
+      throw new BadRequestException(`Foydalanuvchi ushbu kursga allaqachon ega va muddati hali tugamagan`);
     }
 
     const purchase = this.purchasesRepository.create({
@@ -95,7 +100,7 @@ export class PurchasesService {
     const saved = await this.purchasesRepository.save(purchase);
 
     const existingUserCourse = await this.userCourseService.findUserCourse(purchase.user.id, purchase.course.id);
-    if (!existingUserCourse) {
+    if (!existingUserCourse || existingUserCourse.expiresAt <= new Date()) {
       await this.userCourseService.assignCourseToUser(purchase.user.id, purchase.course.id);
     }
 
@@ -143,7 +148,7 @@ export class PurchasesService {
         name: purchase.course.name,
       },
       category: {
-        id: purchase.course.id,
+        id: purchase.category.id,
         name: purchase.category.name,
         price: purchase.category.price,
       },

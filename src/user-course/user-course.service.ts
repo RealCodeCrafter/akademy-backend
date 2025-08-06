@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MoreThan, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { UserCourse } from './entities/user-course.entity';
 import { User } from '../user/entities/user.entity';
 import { Course } from '../course/entities/course.entity';
@@ -29,7 +29,7 @@ export class UserCourseService {
     const existingUserCourse = await this.userCourseRepository.findOne({
       where: { user: { id: userId }, course: { id: courseId } },
     });
-    if (existingUserCourse) {
+    if (existingUserCourse && existingUserCourse.expiresAt > new Date()) {
       return existingUserCourse;
     }
 
