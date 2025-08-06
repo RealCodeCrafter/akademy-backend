@@ -3,25 +3,35 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Level } from './entities/level.entity';
 import { CreateLevelDto } from './dto/create-level.dto';
+import { CategoryService } from '../category/category.service';
 
 @Injectable()
 export class LevelService {
   constructor(
     @InjectRepository(Level)
     private levelRepository: Repository<Level>,
+    private categoryService: CategoryService,
   ) {}
 
   async create(createLevelDto: CreateLevelDto) {
+    const { name, categoryId } = createLevelDto;
+
     const existingLevel = await this.levelRepository.findOne({
-      where: { name: createLevelDto.name },
+      where: { name },
     });
 
     if (existingLevel) {
-      throw new BadRequestException(`"${createLevelDto.name}" nomli daraja allaqachon mavjud`);
+      throw new BadRequestException(`"${name}" nomli daraja allaqachon mavjud`);
     }
 
-    const level = this.levelRepository.create(createLevelDto);
-    return this.levelRepository.save(level);
+    const level = this.levelRepository.create({ name });
+    const savedLevel = await this.levelRepository.save(level);
+
+    if (categoryId) {
+      await this.categoryService.addLevelToCategory(categoryId, savedLevel.id);
+    }
+
+    return savedLevel;
   }
 
   async findAll() {
