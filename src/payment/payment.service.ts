@@ -7,6 +7,7 @@ import { UsersService } from '../user/user.service';
 import { CoursesService } from '../course/course.service';
 import { CategoryService } from '../category/category.service';
 import { PurchasesService } from '../purchases/purchases.service';
+import { LevelService } from '../level/level.service';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as jwt from 'jsonwebtoken';
@@ -22,6 +23,7 @@ export class PaymentsService {
     private coursesService: CoursesService,
     private categoryService: CategoryService,
     private purchasesService: PurchasesService,
+    private levelService: LevelService,
     private configService: ConfigService,
   ) {}
 
@@ -106,7 +108,7 @@ export class PaymentsService {
   }
 
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
-    this.logger.log(`To‘lov boshlanmoqda: userId=${userId}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, degree=${createPaymentDto.degree}`);
+    this.logger.log(`To‘lov boshlanmoqda: userId=${userId}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`);
 
     const user = await this.usersService.findOne(userId);
     if (!user) {
@@ -130,6 +132,23 @@ export class PaymentsService {
     if (!isCategoryLinked) {
       this.logger.error(`Ushbu kursga bu kategoriya tegishli emas: courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}`);
       throw new NotFoundException('Ushbu kursga bu kategoriya tegishli emas');
+    }
+
+    let degree: string;
+    if (createPaymentDto.levelId) {
+      const level = await this.levelService.findOne(createPaymentDto.levelId);
+      if (!level) {
+        this.logger.error(`Daraja topilmadi: levelId=${createPaymentDto.levelId}`);
+        throw new NotFoundException('Daraja topilmadi');
+      }
+      const isLevelLinked = await this.categoryService.isLevelLinkedToCategory(createPaymentDto.categoryId, createPaymentDto.levelId);
+      if (!isLevelLinked) {
+        this.logger.error(`Ushbu daraja bu kategoriyaga tegishli emas: categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`);
+        throw new BadRequestException('Ushbu daraja bu kategoriyaga tegishli emas');
+      }
+      degree = level.name;
+    } else {
+      degree = category.name; // Darajasiz kategoriyalar uchun (masalan, Exams)
     }
 
     const purchase = await this.purchasesService.create(createPaymentDto, userId);
@@ -166,7 +185,7 @@ export class PaymentsService {
         paymentUrl: `https://test.pay.tochka.com/mock_payment_${transactionId}`,
         paymentId: savedPayment.id,
         purchaseId: purchase.id,
-        transactionId, // transactionId ni javobda qaytarish
+        transactionId,
       };
     }
 
@@ -179,7 +198,7 @@ export class PaymentsService {
           currency: 'RUB',
           customerCode,
           merchantId,
-          description: `Kurs: ${course.name}, Kategoriya: ${category.name}, Daraja: ${createPaymentDto.degree}`,
+          description: `Kurs: ${course.name}, Kategoriya: ${category.name}, Daraja: ${degree}`,
           successUrl: 'https://aplusacademy.ru/success',
           failUrl: 'https://aplusacademy.ru/fail',
           orderId: transactionId,

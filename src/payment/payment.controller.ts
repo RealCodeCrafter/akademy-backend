@@ -18,7 +18,7 @@ export class PaymentsController {
   @UseGuards(AuthGuard)
   @Post('start')
   async startPayment(@Body() createPaymentDto: CreatePaymentDto, @Req() req: AuthenticatedRequest) {
-    this.logger.log(`To'lov boshlash so'rovi: userId=${req.user?.sub}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, degree=${createPaymentDto.degree}`);
+    this.logger.log(`To'lov boshlash so'rovi: userId=${req.user?.sub}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`);
     const userId = req.user?.sub;
     if (!userId) {
       this.logger.error('Foydalanuvchi aniqlanmadi: Auth tokeni noto‘g‘ri yoki yo‘q');

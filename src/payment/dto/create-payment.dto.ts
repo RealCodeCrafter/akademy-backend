@@ -1,4 +1,4 @@
-import { IsNumber, IsString, IsIn } from 'class-validator';
+import { IsNumber, IsOptional } from 'class-validator';
 
 export class CreatePaymentDto {
   @IsNumber()
@@ -7,6 +7,7 @@ export class CreatePaymentDto {
   @IsNumber()
   categoryId: number;
 
-  @IsString()
-  degree: string;
+  @IsNumber()
+  @IsOptional()
+  levelId?: number;
 }
