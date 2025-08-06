@@ -94,7 +94,10 @@ export class PurchasesService {
     purchase.status = 'paid';
     const saved = await this.purchasesRepository.save(purchase);
 
-    await this.userCourseService.assignCourseToUser(purchase.user.id, purchase.course.id);
+    const existingUserCourse = await this.userCourseService.findUserCourse(purchase.user.id, purchase.course.id);
+    if (!existingUserCourse) {
+      await this.userCourseService.assignCourseToUser(purchase.user.id, purchase.course.id);
+    }
 
     return {
       id: saved.id,
@@ -140,7 +143,7 @@ export class PurchasesService {
         name: purchase.course.name,
       },
       category: {
-        id: purchase.category.id,
+        id: purchase.course.id,
         name: purchase.category.name,
         price: purchase.category.price,
       },

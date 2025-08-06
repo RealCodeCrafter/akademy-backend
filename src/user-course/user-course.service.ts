@@ -10,7 +10,7 @@ export class UserCourseService {
   constructor(
     @InjectRepository(UserCourse)
     private userCourseRepository: Repository<UserCourse>,
-   @InjectRepository(User) private userRepository: Repository<User>,
+    @InjectRepository(User) private userRepository: Repository<User>,
     @InjectRepository(Course)
     private courseRepository: Repository<Course>,
   ) {}
@@ -26,6 +26,13 @@ export class UserCourseService {
       throw new NotFoundException(`Kurs ID ${courseId} bilan topilmadi`);
     }
 
+    const existingUserCourse = await this.userCourseRepository.findOne({
+      where: { user: { id: userId }, course: { id: courseId } },
+    });
+    if (existingUserCourse) {
+      return existingUserCourse;
+    }
+
     const expiresAt = new Date();
     expiresAt.setMonth(expiresAt.getMonth() + (course.durationMonths || 6));
 
@@ -38,9 +45,15 @@ export class UserCourseService {
     return this.userCourseRepository.save(userCourse);
   }
 
+  async findUserCourse(userId: number, courseId: number) {
+    return this.userCourseRepository.findOne({
+      where: { user: { id: userId }, course: { id: courseId } },
+    });
+  }
+
   async findUserCourses(userId: number) {
     const userCourses = await this.userCourseRepository.find({
-      where: { user: { id: userId }, expiresAt: MoreThan(new Date()) },
+      where: { user: { id: userId } },
       relations: ['course', 'course.categories'],
       order: { createdAt: 'ASC' },
     });
@@ -51,6 +64,11 @@ export class UserCourseService {
         id: userCourse.course.id,
         name: userCourse.course.name,
         durationMonths: userCourse.course.durationMonths,
+        categories: userCourse.course.categories.map(category => ({
+          id: category.id,
+          name: category.name,
+          price: category.price,
+        })),
       },
       expiresAt: userCourse.expiresAt,
       createdAt: userCourse.createdAt,
