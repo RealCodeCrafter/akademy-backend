@@ -13,26 +13,31 @@ export class LevelService {
     private categoryService: CategoryService,
   ) {}
 
+
   async create(createLevelDto: CreateLevelDto) {
-    const { name, categoryId } = createLevelDto;
+  const { name, categoryId } = createLevelDto;
 
-    const existingLevel = await this.levelRepository.findOne({
-      where: { name },
-    });
+  const existingLevel = await this.levelRepository.findOne({
+    where: {
+      name,
+      categories: { id: categoryId },
+    },
+    relations: ['categories'],
+  });
 
-    if (existingLevel) {
-      throw new BadRequestException(`"${name}" nomli daraja allaqachon mavjud`);
-    }
-
-    const level = this.levelRepository.create({ name });
-    const savedLevel = await this.levelRepository.save(level);
-
-    if (categoryId) {
-      await this.categoryService.addLevelToCategory(categoryId, savedLevel.id);
-    }
-
-    return savedLevel;
+  if (existingLevel) {
+    throw new BadRequestException(`"${name}" nomli daraja ushbu kategoriyada allaqachon mavjud`);
   }
+
+  const level = this.levelRepository.create({
+    name,
+    categories: [{ id: categoryId }],
+  });
+
+  const savedLevel = await this.levelRepository.save(level);
+  return savedLevel;
+}
+
 
   async findAll() {
     return this.levelRepository.find({
