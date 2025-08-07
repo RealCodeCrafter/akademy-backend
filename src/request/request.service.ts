@@ -25,12 +25,15 @@ export class RequestsService {
   }
 
   async findAccepted() {
-    return this.requestsRepository.find({
-      where: { status: 'accepted' },
-      relations: ['user'],
-      order: { createdAt: 'ASC' },
-    });
-  }
+  return this.requestsRepository
+    .createQueryBuilder('request')
+    .leftJoinAndSelect('request.user', 'user')
+    .where('request.status = :status', { status: 'accepted' })
+    .andWhere('request.userId IS NULL')
+    .orderBy('request.createdAt', 'ASC')
+    .getMany();
+}
+
 
   async findPending() {
   return this.requestsRepository.find({
