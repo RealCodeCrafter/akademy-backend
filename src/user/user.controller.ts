@@ -23,6 +23,14 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+    @Post('from-request/:requestId')
+  createFromRequest(
+    @Param('requestId') requestId: string,
+    @Body() createUserDto: CreateUserDto,
+  ) {
+    return this.usersService.createFromRequest(+requestId, createUserDto);
+  }
+
   // @UseGuards(AuthGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
