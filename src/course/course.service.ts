@@ -36,13 +36,12 @@ export class CoursesService {
 
     return this.coursesRepository.save(course);
   }
-
-  async findAll() {
-    return this.coursesRepository.find({
-      relations: ['categories'],
-      order: { createdAt: 'ASC' },
-    });
-  }
+async findAll() {
+  return this.coursesRepository.find({
+    relations: ['categories', 'categories.levels'],
+    order: { createdAt: 'ASC' },
+  });
+}
 
   async findOne(id: number) {
     const course = await this.coursesRepository.findOne({
