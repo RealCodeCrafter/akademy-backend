@@ -10,37 +10,37 @@ export class CategoryController {
   constructor(private categoryService: CategoryService) {}
 
   
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles('admin')
+  // @UseGuards(AuthGuard, RolesGuard)
+  // @Roles('admin')
   @Post()
   create(@Body() createCategoryDto: CreateCategoryDto) {
     return this.categoryService.create(createCategoryDto);
   }
   
   
-  @UseGuards(AuthGuard)
+  // @UseGuards(AuthGuard)
    @Get(':id/levels')
   async getLevelsByCategory(@Param('id') id: string) {
     return this.categoryService.getLevelsByCategory(+id);
   }
 
   
-  @UseGuards(AuthGuard)
+  // @UseGuards(AuthGuard)
   @Get()
   findAll() {
     return this.categoryService.findAll();
   }
 
   
-  @UseGuards(AuthGuard)
+  // @UseGuards(AuthGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.categoryService.findOne(+id);
   }
 
   
-  @UseGuards(AuthGuard, RolesGuard)
-  @Roles('admin')
+  // @UseGuards(AuthGuard, RolesGuard)
+  // @Roles('admin')
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.categoryService.delete(+id);

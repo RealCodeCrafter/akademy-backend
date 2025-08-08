@@ -10,8 +10,8 @@ export class CoursesController {
   constructor(private coursesService: CoursesService) {}
 
   
-    @UseGuards(AuthGuard, RolesGuard)
-    @Roles('admin')
+    // @UseGuards(AuthGuard, RolesGuard)
+    // @Roles('admin')
   @Post()
   create(@Body() createCourseDto: CreateCourseDto) {
     return this.coursesService.create(createCourseDto);
