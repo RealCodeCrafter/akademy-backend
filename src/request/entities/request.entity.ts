@@ -14,7 +14,7 @@ export class Request {
 
   @Column()
   parentEmail: string;
-  
+
   @Column({ nullable: true })
   comment: string;
 
@@ -24,6 +24,6 @@ export class Request {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @ManyToOne(() => User, (user) => user.requests, { nullable: true })
+  @ManyToOne(() => User, (user) => user.requests, { nullable: true, onDelete: 'CASCADE' })
   user: User;
 }

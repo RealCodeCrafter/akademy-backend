@@ -12,7 +12,7 @@ export class UserDocument {
   @Column()
   fileUrl: string;
 
-  @ManyToOne(() => User, (user) => user.documents)
+  @ManyToOne(() => User, (user) => user.documents, { onDelete: 'CASCADE' })
   user: User;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })

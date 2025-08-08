@@ -19,12 +19,12 @@ export class Payment {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @ManyToOne(() => User, (user) => user.payments)
+  @ManyToOne(() => User, (user) => user.payments, { onDelete: 'CASCADE' })
   user: User;
 
   @Column()
   purchaseId: number;
 
-  @ManyToOne(() => Purchase, (purchase) => purchase.payments)
+  @ManyToOne(() => Purchase, (purchase) => purchase.payments, { onDelete: 'CASCADE' })
   purchase: Purchase;
 }

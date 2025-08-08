@@ -21,5 +21,5 @@ export class Category {
 
   @ManyToMany(() => Level, (level) => level.categories)
   @JoinTable()
-levels: Level[];
+  levels: Level[];
 }

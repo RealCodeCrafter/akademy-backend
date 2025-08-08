@@ -24,13 +24,13 @@ export class Purchase {
   @Column({ default: 'pending' })
   status: 'pending' | 'paid' | 'failed';
 
-  @ManyToOne(() => Category, { nullable: true })
+  @ManyToOne(() => Category, { nullable: true, onDelete: 'CASCADE' })
   category: Category;
 
-  @ManyToOne(() => User, (user) => user.purchases)
+  @ManyToOne(() => User, (user) => user.purchases, { onDelete: 'CASCADE' })
   user: User;
 
-  @ManyToOne(() => Course, (course) => course.purchases)
+  @ManyToOne(() => Course, (course) => course.purchases, { onDelete: 'CASCADE' })
   course: Course;
 
   @OneToMany(() => Payment, (payment) => payment.purchase)

@@ -7,13 +7,13 @@ export class UserCourse {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => User, (user) => user.userCourses)
+  @ManyToOne(() => User, (user) => user.userCourses, { onDelete: 'CASCADE' })
   user: User;
 
-  @ManyToOne(() => Course, (course) => course.userCourses)
+  @ManyToOne(() => Course, (course) => course.userCourses, { onDelete: 'CASCADE' })
   course: Course;
 
-  @Column({default: "unknown"})
+  @Column({ default: "unknown" })
   degree: string;
 
   @Column({ type: 'timestamp' })
