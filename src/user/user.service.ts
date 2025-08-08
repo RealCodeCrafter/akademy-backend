@@ -16,23 +16,25 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto) {
-    const existingUser = await this.usersRepository.findOne({
-      where: { username: createUserDto.username },
-    });
+  const existingUser = await this.usersRepository.findOne({
+    where: { username: createUserDto.username },
+  });
 
-    if (existingUser) {
-      throw new BadRequestException('Bu username bilan foydalanuvchi allaqachon mavjud');
-    }
-
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-
-    const user = this.usersRepository.create({
-      ...createUserDto,
-      password: hashedPassword,
-    });
-
-    return this.usersRepository.save(user);
+  if (existingUser) {
+    throw new BadRequestException('Bu username bilan foydalanuvchi allaqachon mavjud');
   }
+
+  const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+
+  const user = this.usersRepository.create({
+    ...createUserDto,
+    password: hashedPassword,
+    role: createUserDto.role || 'user', // 👈 Qo‘shildi
+  });
+
+  return this.usersRepository.save(user);
+}
+
 
   async createFromRequest(requestId: number, createUserDto: CreateUserDto) {
     const request = await this.requestsService.findOne(requestId);
@@ -83,17 +85,21 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
-  async findOne(id: number) {
-    const user = await this.usersRepository.findOne({
-      where: { id },
-      relations: ['purchases', 'requests', 'userCourses', 'documents'],
-      order: { createdAt: 'ASC' },
-    });
-    if (!user) {
-      throw new NotFoundException(`Foydalanuvchi ID ${id} bilan topilmadi`);
-    }
-    return user;
+async findOne(id: number) {
+  const user = await this.usersRepository.findOne({
+    where: { id },
+    relations: ['purchases', 'requests', 'userCourses', 'documents'],
+    order: { createdAt: 'ASC' },
+  });
+
+  if (!user) {
+    throw new NotFoundException(`Foydalanuvchi ID ${id} bilan topilmadi`);
   }
+
+  return user;
+}
+
+
 
   async findByUsername(username: string) {
     return this.usersRepository.findOne({ where: { username } });
@@ -107,12 +113,14 @@ export class UsersService {
     return this.findOne(id);
   }
 
+
   async findAll() {
-    return this.usersRepository.find({
-      relations: ['purchases', 'requests', 'userCourses', 'documents'],
-      order: { createdAt: 'ASC' },
-    });
-  }
+  return this.usersRepository.find({
+    where: { role: 'user' }, // faqat user roli bilan
+    relations: ['purchases', 'requests', 'userCourses', 'documents'],
+    order: { createdAt: 'ASC' },
+  });
+}
 
   async delete(id: number) {
     const user = await this.findOne(id);

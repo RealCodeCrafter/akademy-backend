@@ -11,13 +11,13 @@ export class UsersController {
     private userCourseService: UserCourseService,
   ) {}
 
-  // @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard)
   @Post()
   createAdminUser(@Body() createUserDto: CreateUserDto) {
     return this.usersService.createAdminUser(createUserDto);
   }
 
-  // @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard)
   @Get()
   findAll() {
     return this.usersService.findAll();
@@ -31,25 +31,25 @@ export class UsersController {
     return this.usersService.createFromRequest(+requestId, createUserDto);
   }
 
-  // @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(+id);
   }
 
-  // @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard)
   @Get(':id/courses')
   findUserCourses(@Param('id') id: string) {
     return this.userCourseService.findUserCourses(+id);
   }
 
-  // @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard)
   @Get(':id/documents')
   findUserDocuments(@Param('id') id: string) {
     return this.usersService.findOne(+id).then(user => user.documents);
   }
 
-  // @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard)
   @Delete(':id')
   delete(@Param('id') id: string) {
     return this.usersService.delete(+id);
