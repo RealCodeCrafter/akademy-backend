@@ -11,7 +11,6 @@ import { LevelService } from '../level/level.service';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as jwt from 'jsonwebtoken';
-import { jwk2pem } from 'pem-jwk';
 import axiosRetry from 'axios-retry';
 
 @Injectable()
@@ -33,29 +32,12 @@ export class PaymentsService {
 
   async getCustomerAndMerchantData(token: string) {
     const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
-    const bankCode = this.configService.get<string>('TOCHKA_BANK_CODE') || '044525104';
-
-    if (!customerCode || !bankCode) {
-      this.logger.error(`TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE .env faylida topilmadi: customerCode=${customerCode}, bankCode=${bankCode}`);
-      throw new BadRequestException('TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE topilmadi');
+    if (!customerCode) {
+      this.logger.error('TOCHKA_CUSTOMER_CODE .env faylida topilmadi');
+      throw new BadRequestException('TOCHKA_CUSTOMER_CODE topilmadi');
     }
 
     try {
-      this.logger.log(`Tochka API customer ma'lumotlari so'ralmoqda: https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`);
-      const customersResponse = await axios.get(
-        `https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-
-      this.logger.log(`Customer javobi: ${JSON.stringify(customersResponse.data)}`);
-      const customerData = customersResponse.data.Data;
-      if (customerData.customerType !== 'Business') {
-        this.logger.error('Business customer topilmadi');
-        throw new NotFoundException('Business customer topilmadi');
-      }
-
       this.logger.log('Tochka API merchants ma\'lumotlari so\'ralmoqda: https://enter.tochka.com/uapi/sbp/v1.0/merchants');
       const retailersResponse = await axios.get('https://enter.tochka.com/uapi/sbp/v1.0/merchants', {
         headers: { Authorization: `Bearer ${token}` },
@@ -70,7 +52,7 @@ export class PaymentsService {
         throw new NotFoundException('Faol merchantId topilmadi');
       }
 
-      return { customerCode: customerData.customerCode, merchantId: merchant.merchantId };
+      return { customerCode, merchantId: merchant.merchantId };
     } catch (err) {
       this.logger.error(`Tochka API xatosi: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
       throw new BadRequestException(`Tochka API xatosi: ${err.message}`);
@@ -192,17 +174,10 @@ export class PaymentsService {
       throw new BadRequestException('callbackData parametri taqdim etilmadi');
     }
 
-    let publicKey: string;
-    try {
-      const jwk = {
-        kty: 'RSA',
-        e: 'AQAB',
-        n: 'rwm77av7GIttq-JF1itEgLCGEZW_zz16RlUQVYlLbJtyRSu61fCec_rroP6PxjXU2uLzUOaGaLgAPeUZAJrGuVp9nryKgbZceHckdHDYgJd9TsdJ1MYUsXaOb9joN9vmsCscBx1lwSlFQyNQsHUsrjuDk-opf6RCuazRQ9gkoDCX70HV8WBMFoVm-YWQKJHZEaIQxg_DU4gMFyKRkDGKsYKA0POL-UgWA1qkg6nHY5BOMKaqxbc5ky87muWB5nNk4mfmsckyFv9j1gBiXLKekA_y4UwG2o1pbOLpJS3bP_c95rm4M9ZBmGXqfOQhbjz8z-s9C11i-jmOQ2ByohS-ST3E5sqBzIsxxrxyQDTw--bZNhzpbciyYW4GfkkqyeYoOPd_84jPTBDKQXssvj8ZOj2XboS77tvEO1n1WlwUzh8HPCJod5_fEgSXuozpJtOggXBv0C2ps7yXlDZf-7Jar0UYc_NJEHJF-xShlqd6Q3sVL02PhSCM-ibn9DN9BKmD',
-      };
-      publicKey = jwk2pem(jwk);
-    } catch (err) {
-      this.logger.error(`Tochka public key o‘qishda xato: ${err.message}`);
-      throw new BadRequestException(`Tochka public key o‘qishda xato: ${err.message}`);
+    const publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY');
+    if (!publicKey) {
+      this.logger.error('Tochka public key .env faylida topilmadi');
+      throw new BadRequestException('Tochka public key .env faylida topilmadi');
     }
 
     let decoded: any;
