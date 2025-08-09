@@ -1,4 +1,4 @@
-import { Controller, Post, Param, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Controller, Post, Param, UploadedFile, UseInterceptors, Get } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './user-document.service';
 import { diskStorage } from 'multer';
@@ -34,7 +34,7 @@ export class DocumentsController {
     return this.documentsService.uploadDocument(+userId, file);
   }
 
-  @Post(':userId/documents')
+  @Get(':userId/documents')
   findUserDocuments(@Param('userId') userId: string) {
     return this.documentsService.findUserDocuments(+userId);
   }
