@@ -36,13 +36,7 @@ export class PaymentsCronService {
         this.logger.log('✅ Tozalash uchun eski pending to‘lovlar topilmadi');
       }
     } catch (err) {
-      this.logger.error(`❌ Pending to‘lovlarni tozalashda xato:`, err.stack);
+      this.logger.error(`❌ Pending to‘lovlarni tozalashda xato: ${err.message}, stack: ${err.stack}`);
     }
   }
 }
-
-
-
-
-
-
