@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Payment } from './entities/payment.entity';
@@ -11,6 +11,8 @@ import { LevelService } from '../level/level.service';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as jwt from 'jsonwebtoken';
+import { jwk2pem } from 'pem-jwk';
+import axiosRetry from 'axios-retry';
 
 @Injectable()
 export class PaymentsService {
@@ -25,7 +27,9 @@ export class PaymentsService {
     private purchasesService: PurchasesService,
     private levelService: LevelService,
     private configService: ConfigService,
-  ) {}
+  ) {
+    axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
+  }
 
   async getCustomerAndMerchantData(token: string) {
     const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
@@ -43,21 +47,7 @@ export class PaymentsService {
         {
           headers: { Authorization: `Bearer ${token}` },
         },
-      ).catch(err => {
-        if (err.response?.status === 403) {
-          this.logger.error('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak. Dokumentatsiyani tekshiring: https://enter.tochka.com/doc/v2/redoc');
-          throw new UnauthorizedException('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak');
-        }
-        if (err.response?.status === 401) {
-          this.logger.error('Token yaroqsiz yoki muddati tugagan');
-          throw new UnauthorizedException('Token yaroqsiz yoki muddati tugagan');
-        }
-        if (err.response?.status === 404) {
-          this.logger.error(`Customer topilmadi: customerCode=${customerCode}, bankCode=${bankCode}`);
-          throw new NotFoundException('Customer topilmadi');
-        }
-        throw new BadRequestException(`Tochka API xatosi: ${err.message}, status: ${err.response?.status}`);
-      });
+      );
 
       this.logger.log(`Customer javobi: ${JSON.stringify(customersResponse.data)}`);
       const customerData = customersResponse.data.Data;
@@ -69,12 +59,6 @@ export class PaymentsService {
       this.logger.log('Tochka API merchants ma\'lumotlari so\'ralmoqda: https://enter.tochka.com/uapi/sbp/v1.0/merchants');
       const retailersResponse = await axios.get('https://enter.tochka.com/uapi/sbp/v1.0/merchants', {
         headers: { Authorization: `Bearer ${token}` },
-      }).catch(err => {
-        if (err.response?.status === 403) {
-          this.logger.error('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak');
-          throw new UnauthorizedException('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak');
-        }
-        throw new BadRequestException(`Merchants API xatosi: ${err.message}, status: ${err.response?.status}`);
       });
 
       this.logger.log(`Merchants javobi: ${JSON.stringify(retailersResponse.data)}`);
@@ -88,7 +72,7 @@ export class PaymentsService {
 
       return { customerCode: customerData.customerCode, merchantId: merchant.merchantId };
     } catch (err) {
-      this.logger.error(`Tochka API xatosi: ${err.message}, status: ${err.response?.status}, response: ${JSON.stringify(err.response?.data)}`);
+      this.logger.error(`Tochka API xatosi: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
       throw new BadRequestException(`Tochka API xatosi: ${err.message}`);
     }
   }
@@ -134,7 +118,7 @@ export class PaymentsService {
       }
       degree = level.name;
     } else {
-      degree = category.name; // Darajasiz kategoriyalar uchun (masalan, Exams)
+      degree = category.name;
     }
 
     const purchase = await this.purchasesService.create(createPaymentDto, userId);
@@ -161,6 +145,8 @@ export class PaymentsService {
 
     const { customerCode, merchantId } = await this.getCustomerAndMerchantData(token);
 
+    const paymentMethods = this.configService.get<string>('TOCHKA_PAYMENT_METHODS')?.split(',') || ['CARD', 'SBP'];
+
     try {
       this.logger.log(`Tochka API payment-links endpointiga so‘rov yuborilmoqda: https://enter.tochka.com/uapi/sbp/v1.0/payment-links`);
       const paymentResponse = await axios.post(
@@ -174,7 +160,7 @@ export class PaymentsService {
           successUrl: 'https://aplusacademy.ru/success',
           failUrl: 'https://aplusacademy.ru/fail',
           orderId: transactionId,
-          paymentMethods: ['CARD', 'SBP'], // SBP qo‘shildi
+          paymentMethods,
         },
         {
           headers: {
@@ -183,17 +169,7 @@ export class PaymentsService {
             'CustomerCode': customerCode,
           },
         },
-      ).catch(err => {
-        if (err.response?.status === 403) {
-          this.logger.error('Token ruxsatlari yetarli emas: MakeAcquiringOperation ruxsati kerak. Dokumentatsiyani tekshiring: https://enter.tochka.com/doc/v2/redoc');
-          throw new UnauthorizedException('Token ruxsatlari yetarli emas: MakeAcquiringOperation ruxsati kerak');
-        }
-        if (err.response?.status === 400) {
-          this.logger.error(`So'rov body formati noto'g'ri: ${JSON.stringify(err.response.data)}`);
-          throw new BadRequestException(`So'rov body formati noto'g'ri: ${err.message}`);
-        }
-        throw new BadRequestException(`To‘lov havolasi yaratishda xato: ${err.message}, status: ${err.response?.status}`);
-      });
+      );
 
       this.logger.log(`To‘lov havolasi yaratildi: paymentId=${savedPayment.id}, paymentUrl=${paymentResponse.data.Data.paymentLink}`);
       return {
@@ -203,7 +179,7 @@ export class PaymentsService {
         transactionId,
       };
     } catch (err) {
-      this.logger.error(`To‘lov havolasi yaratishda xato: ${err.message}, status: ${err.response?.status}, response: ${JSON.stringify(err.response?.data)}`);
+      this.logger.error(`To‘lov havolasi yaratishda xato: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
       throw new BadRequestException(`To‘lov havolasi yaratishda xato: ${err.message}`);
     }
   }
@@ -218,11 +194,12 @@ export class PaymentsService {
 
     let publicKey: string;
     try {
-      publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY') || '';
-      if (!publicKey) {
-        this.logger.error('Tochka public key .env faylida topilmadi');
-        throw new BadRequestException('Tochka public key .env faylida topilmadi');
-      }
+      const jwk = {
+        kty: 'RSA',
+        e: 'AQAB',
+        n: 'rwm77av7GIttq-JF1itEgLCGEZW_zz16RlUQVYlLbJtyRSu61fCec_rroP6PxjXU2uLzUOaGaLgAPeUZAJrGuVp9nryKgbZceHckdHDYgJd9TsdJ1MYUsXaOb9joN9vmsCscBx1lwSlFQyNQsHUsrjuDk-opf6RCuazRQ9gkoDCX70HV8WBMFoVm-YWQKJHZEaIQxg_DU4gMFyKRkDGKsYKA0POL-UgWA1qkg6nHY5BOMKaqxbc5ky87muWB5nNk4mfmsckyFv9j1gBiXLKekA_y4UwG2o1pbOLpJS3bP_c95rm4M9ZBmGXqfOQhbjz8z-s9C11i-jmOQ2ByohS-ST3E5sqBzIsxxrxyQDTw--bZNhzpbciyYW4GfkkqyeYoOPd_84jPTBDKQXssvj8ZOj2XboS77tvEO1n1WlwUzh8HPCJod5_fEgSXuozpJtOggXBv0C2ps7yXlDZf-7Jar0UYc_NJEHJF-xShlqd6Q3sVL02PhSCM-ibn9DN9BKmD',
+      };
+      publicKey = jwk2pem(jwk);
     } catch (err) {
       this.logger.error(`Tochka public key o‘qishda xato: ${err.message}`);
       throw new BadRequestException(`Tochka public key o‘qishda xato: ${err.message}`);

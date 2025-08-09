@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import * as express from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -17,6 +18,8 @@ async function bootstrap() {
     origin: '*',
     credentials: true,
   });
+
+  app.use(express.text({ type: 'text/plain' }));
 
   await app.listen(7000, '0.0.0.0');
 }

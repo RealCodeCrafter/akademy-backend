@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Req, UseGuards, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards, UnauthorizedException, BadRequestException, RawBody } from '@nestjs/common';
 import { PaymentsService } from './payment.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { AuthGuard } from '../auth/auth.guard';
@@ -35,9 +35,8 @@ export class PaymentsController {
   }
 
   @Post('callback')
-  async handleCallback(@Body() body: any) {
-    this.logger.log(`Webhook so'rovi keldi: body=${JSON.stringify(body)}`);
-    const callbackData = JSON.stringify(body);
+  async handleCallback(@RawBody() callbackData: string) {
+    this.logger.log(`Webhook so'rovi keldi: ${callbackData}`);
     if (!callbackData) {
       this.logger.error('callbackData parametri taqdim etilmadi');
       throw new BadRequestException('callbackData parametri taqdim etilmadi');
