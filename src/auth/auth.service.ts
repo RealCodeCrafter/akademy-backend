@@ -68,30 +68,28 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
-    const user = await this.usersService.findByUsername(loginDto.username);
-    if (!user) {
-      throw new NotFoundException('Foydalanuvchi topilmadi');
-    }
-
-    const isPasswordValid = await bcrypt.compare(
-      loginDto.password,
-      user.password,
-    );
-
-    if (!isPasswordValid) {
-      throw new UnauthorizedException('Noto‘g‘ri parol');
-    }
-
-    const payload = { username: user.username, sub: user.id, role: user.role };
-    return {
-      access_token: this.jwtService.sign(payload),
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
-      message: 'Kirish muvaffaqiyatli amalga oshirildi',
-    };
+  const user = await this.usersService.findByUsername(loginDto.username);
+  if (!user) {
+    throw new NotFoundException('Foydalanuvchi topilmadi');
   }
+
+  const decryptedPassword = this.usersService.decryptPassword(user.password);
+
+  if (loginDto.password !== decryptedPassword) {
+    throw new UnauthorizedException('Noto‘g‘ri parol');
+  }
+
+  const payload = { username: user.username, sub: user.id, role: user.role };
+  return {
+    access_token: this.jwtService.sign(payload),
+    user: {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    },
+    message: 'Kirish muvaffaqiyatli amalga oshirildi',
+  };
+}
+
 }
