@@ -53,7 +53,7 @@ export class AuthService {
       throw new BadRequestException('Bu username yoki email allaqachon mavjud');
     }
 
-    const user = await this.usersService.create({
+    const user = await this.usersService.createAdminUser({
       ...createAuthDto,
       role: 'admin',
     });
@@ -77,6 +77,7 @@ export class AuthService {
       loginDto.password,
       user.password,
     );
+
     if (!isPasswordValid) {
       throw new UnauthorizedException('Noto‘g‘ri parol');
     }
