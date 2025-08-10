@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
+
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './user/user.module';
 import { RequestsModule } from './request/request.module';
@@ -18,25 +21,29 @@ import { LevelModule } from './level/level.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+
     TypeOrmModule.forRootAsync({
-    imports: [ConfigModule],
-    inject: [ConfigService],
-    useFactory: (config: ConfigService) => ({
-    type: 'postgres',
-    host: config.get<string>('DB_HOST') ?? 'localhost',
-    port: parseInt(config.get<string>('DB_PORT') ?? '5432', 10),
-    username: config.get<string>('DB_USERNAME') ?? 'postgres',
-    password: config.get<string>('DB_PASSWORD') ?? 'postgres',
-    database: config.get<string>('DB_NAME') ?? 'test',
-    synchronize: true,
-    autoLoadEntities: true,
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres',
+        host: config.get<string>('DB_HOST') ?? 'localhost',
+        port: parseInt(config.get<string>('DB_PORT') ?? '5432', 10),
+        username: config.get<string>('DB_USERNAME') ?? 'postgres',
+        password: config.get<string>('DB_PASSWORD') ?? 'postgres',
+        database: config.get<string>('DB_NAME') ?? 'test',
+        synchronize: true,
+        autoLoadEntities: true,
+        ssl: {
+          rejectUnauthorized: false,
+        },
+      }),
+    }),
 
-    ssl: {
-      rejectUnauthorized: false,
-
-    },
-  }),
-}),
+    ServeStaticModule.forRoot({
+        rootPath: join(process.cwd(), 'uploads'), 
+      serveRoot: '/uploads',
+    }),
 
     AuthModule,
     UsersModule,
@@ -47,13 +54,7 @@ import { LevelModule } from './level/level.module';
     PaymentModule,
     UserCourseModule,
     UserDocumentModule,
-    LevelModule
+    LevelModule,
   ],
-  
 })
-
-
 export class AppModule {}
-
-
-
