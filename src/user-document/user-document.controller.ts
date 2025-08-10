@@ -58,39 +58,34 @@ export class DocumentsController {
       },
     }),
   )
-  uploadDocument(
+  async uploadDocument(
     @Param('userId') userId: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) {
       throw new BadRequestException('Fayl yuklanmadi');
     }
-    return this.documentsService.uploadDocument(+userId, file);
+    return await this.documentsService.uploadDocument(+userId, file);
   }
 
   @Get(':userId/documents')
-  findUserDocuments(@Param('userId') userId: string) {
-    return this.documentsService.findUserDocuments(+userId);
+  async findUserDocuments(@Param('userId') userId: string) {
+    return await this.documentsService.findUserDocuments(+userId);
   }
 
-    @Get()
-  findAllDocuments() {
-    return this.documentsService.findAll();
-  }
-  
-  @Get('file/:fileName')
-  getFile(@Param('fileName') fileName: string, @Res() res: Response) {
+  @Get('download/:fileName')
+  async downloadFile(@Param('fileName') fileName: string, @Res() res: Response) {
     const filePath = join(process.cwd(), 'uploads', fileName);
 
     if (!existsSync(filePath)) {
       throw new NotFoundException('Fayl topilmadi');
     }
 
-    return res.sendFile(filePath); // sendFile endi ishlaydi
+    return res.download(filePath, fileName); // Yuklab olish uchun
   }
 
   @Delete(':docId')
-  deleteDocument(@Param('docId') docId: string) {
-    return this.documentsService.deleteDocument(+docId);
+  async deleteDocument(@Param('docId') docId: string) {
+    return await this.documentsService.deleteDocument(+docId);
   }
 }
