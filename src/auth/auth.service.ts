@@ -66,8 +66,7 @@ export class AuthService {
       message: 'Admin muvaffaqiyatli qo‘shildi',
     };
   }
-
-  async login(loginDto: LoginDto) {
+async login(loginDto: LoginDto) {
   const user = await this.usersService.findByUsername(loginDto.username);
   if (!user) {
     throw new NotFoundException('Foydalanuvchi topilmadi');
@@ -75,7 +74,7 @@ export class AuthService {
 
   const decryptedPassword = this.usersService.decryptPassword(user.password);
 
-  if (loginDto.password !== decryptedPassword) {
+  if (loginDto.password.trim() !== decryptedPassword.trim()) {
     throw new UnauthorizedException('Noto‘g‘ri parol');
   }
 
@@ -91,5 +90,6 @@ export class AuthService {
     message: 'Kirish muvaffaqiyatli amalga oshirildi',
   };
 }
+
 
 }
