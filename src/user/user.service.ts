@@ -105,13 +105,19 @@ async findOne(id: number) {
     return this.usersRepository.findOne({ where: { username } });
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto) {
-    if (updateUserDto.password) {
-      updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
-    }
-    await this.usersRepository.update(id, updateUserDto);
-    return this.findOne(id);
+  
+async update(id: number, updateUserDto: UpdateUserDto) {
+  const user = await this.findOne(id);
+
+  if (updateUserDto.password) {
+    updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
   }
+
+  await this.usersRepository.update(id, updateUserDto);
+  
+  return this.findOne(id);
+}
+
 
 
   async findAll() {

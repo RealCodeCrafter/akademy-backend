@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, UseGuards, Put } from '@nestjs/common';
 import { UsersService } from './user.service';
 import { CreateUserDto } from '../auth/dto/create-user.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { UserCourseService } from '../user-course/user-course.service';
+import { UpdateUserDto } from 'src/auth/dto/update-user.dto';
 
 @Controller('users')
 export class UsersController {
@@ -47,6 +48,13 @@ export class UsersController {
   @Get(':id/documents')
   findUserDocuments(@Param('id') id: string) {
     return this.usersService.findOne(+id).then(user => user.documents);
+  }
+
+  
+  // @UseGuards(AuthGuard)
+  @Put(':id')
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(+id, updateUserDto);
   }
 
   // @UseGuards(AuthGuard)
