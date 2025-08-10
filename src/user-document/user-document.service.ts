@@ -3,8 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserDocument } from './entities/user-document.entity';
 import { UsersService } from '../user/user.service';
-import { unlink } from 'fs/promises';
-import { join } from 'path';
+import { unlink, writeFile } from 'fs/promises';
+import { join, extname } from 'path';
 
 @Injectable()
 export class DocumentsService {
@@ -20,11 +20,18 @@ export class DocumentsService {
       throw new NotFoundException(`Foydalanuvchi ID ${userId} bilan topilmadi`);
     }
 
+    // Faylni diskka asinxron yozamiz
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const fileName = `${file.fieldname}-${uniqueSuffix}${extname(file.originalname)}`;
+    const filePath = join(process.cwd(), 'uploads', fileName);
+
+    await writeFile(filePath, file.buffer); // memoryStorage'dan keladi
+
     const baseUrl = process.env.BASE_URL || 'https://akademy-backend-production.up.railway.app';
 
     const document = this.documentRepository.create({
       fileName: file.originalname,
-      fileUrl: `${baseUrl}/uploads/${file.filename}`,
+      fileUrl: `${baseUrl}/uploads/${fileName}`,
       user,
     });
 
@@ -57,9 +64,9 @@ export class DocumentsService {
     }));
   }
 
-   async findAll() {
+  async findAll() {
     const documents = await this.documentRepository.find({
-      relations: ['user'], 
+      relations: ['user'],
       order: { createdAt: 'DESC' },
     });
 
@@ -77,34 +84,33 @@ export class DocumentsService {
   }
 
   async deleteDocument(docId: number) {
-  const document = await this.documentRepository.findOne({
-    where: { id: docId },
-  });
+    const document = await this.documentRepository.findOne({
+      where: { id: docId },
+    });
 
-  if (!document) {
-    throw new NotFoundException(`Hujjat ID ${docId} topilmadi`);
+    if (!document) {
+      throw new NotFoundException(`Hujjat ID ${docId} topilmadi`);
+    }
+
+    if (!document.fileUrl) {
+      throw new NotFoundException(`Hujjatning fayl manzili topilmadi`);
+    }
+
+    const fileName = document.fileUrl.split('/').pop();
+    if (!fileName) {
+      throw new NotFoundException(`Fayl nomi aniqlanmadi`);
+    }
+
+    const filePath = join(process.cwd(), 'uploads', fileName);
+
+    try {
+      await unlink(filePath);
+    } catch (err) {
+      console.warn(`Fayl o‘chirilmadi: ${filePath}`, err.message);
+    }
+
+    await this.documentRepository.remove(document);
+
+    return { message: 'Hujjat muvaffaqiyatli o‘chirildi' };
   }
-
-  if (!document.fileUrl) {
-    throw new NotFoundException(`Hujjatning fayl manzili topilmadi`);
-  }
-
-  const fileName = document.fileUrl.split('/').pop();
-  if (!fileName) {
-    throw new NotFoundException(`Fayl nomi aniqlanmadi`);
-  }
-
-  const filePath = join(__dirname, '..', '..', 'uploads', fileName);
-
-  try {
-    await unlink(filePath);
-  } catch (err) {
-    console.warn(`Fayl o‘chirilmadi: ${filePath}`, err.message);
-  }
-
-  await this.documentRepository.remove(document);
-
-  return { message: 'Hujjat muvaffaqiyatli o‘chirildi' };
-}
-
 }
