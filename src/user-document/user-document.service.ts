@@ -57,6 +57,25 @@ export class DocumentsService {
     }));
   }
 
+   async findAll() {
+    const documents = await this.documentRepository.find({
+      relations: ['user'], 
+      order: { createdAt: 'DESC' },
+    });
+
+    return documents.map((doc) => ({
+      id: doc.id,
+      fileName: doc.fileName,
+      fileUrl: doc.fileUrl,
+      createdAt: doc.createdAt,
+      user: {
+        id: doc.user?.id,
+        username: doc.user?.username,
+        email: doc.user?.email,
+      },
+    }));
+  }
+
   async deleteDocument(docId: number) {
   const document = await this.documentRepository.findOne({
     where: { id: docId },
@@ -70,7 +89,6 @@ export class DocumentsService {
     throw new NotFoundException(`Hujjatning fayl manzili topilmadi`);
   }
 
-  // Fayl nomini olish
   const fileName = document.fileUrl.split('/').pop();
   if (!fileName) {
     throw new NotFoundException(`Fayl nomi aniqlanmadi`);

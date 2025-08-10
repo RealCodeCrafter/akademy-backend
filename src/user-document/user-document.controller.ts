@@ -72,6 +72,11 @@ export class DocumentsController {
   findUserDocuments(@Param('userId') userId: string) {
     return this.documentsService.findUserDocuments(+userId);
   }
+
+    @Get()
+  findAllDocuments() {
+    return this.documentsService.findAll();
+  }
   
   @Get('file/:fileName')
   getFile(@Param('fileName') fileName: string, @Res() res: Response) {
