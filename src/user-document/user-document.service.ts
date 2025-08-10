@@ -16,17 +16,13 @@ export class DocumentsService {
 
   async uploadDocument(userId: number, file: Express.Multer.File) {
     const user = await this.usersService.findOne(userId);
-    if (!user) {
-      throw new NotFoundException(`Foydalanuvchi ID ${userId} bilan topilmadi`);
-    }
+    if (!user) throw new NotFoundException(`Foydalanuvchi ID ${userId} topilmadi`);
 
-    // Faylga to'g'ridan-to'g'ri URL
-    const baseUrl =
-      process.env.BASE_URL || 'https://akademy-backend-production.up.railway.app';
+    const baseUrl = process.env.BASE_URL || 'http://localhost:7000';
 
     const document = this.documentRepository.create({
       fileName: file.originalname,
-      fileUrl: `${baseUrl}/uploads/${file.filename}`, // statik URL
+      fileUrl: `${baseUrl}/uploads/${file.filename}`,
       user,
     });
 
@@ -37,70 +33,50 @@ export class DocumentsService {
       fileName: savedDoc.fileName,
       fileUrl: savedDoc.fileUrl,
       createdAt: savedDoc.createdAt,
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-      },
+      user: { id: user.id, username: user.username, email: user.email },
     };
   }
 
   async findUserDocuments(userId: number) {
-    // Faqat shu user hujjatlarini qaytaradi
-    const documents = await this.documentRepository.find({
+    const docs = await this.documentRepository.find({
       where: { user: { id: userId } },
       order: { createdAt: 'DESC' },
     });
 
-    return documents.map((doc) => ({
-      id: doc.id,
-      fileName: doc.fileName,
-      fileUrl: doc.fileUrl,
-      createdAt: doc.createdAt,
+    return docs.map(d => ({
+      id: d.id,
+      fileName: d.fileName,
+      fileUrl: d.fileUrl,
+      createdAt: d.createdAt,
     }));
   }
 
   async findAll() {
-    // Agar faqat admin uchun bo'lsa, shart qo'shish mumkin
-    const documents = await this.documentRepository.find({
+    const docs = await this.documentRepository.find({
       relations: ['user'],
       order: { createdAt: 'DESC' },
     });
 
-    return documents.map((doc) => ({
-      id: doc.id,
-      fileName: doc.fileName,
-      fileUrl: doc.fileUrl,
-      createdAt: doc.createdAt,
-      user: {
-        id: doc.user?.id,
-        username: doc.user?.username,
-        email: doc.user?.email,
-      },
+    return docs.map(d => ({
+      id: d.id,
+      fileName: d.fileName,
+      fileUrl: d.fileUrl,
+      createdAt: d.createdAt,
+      user: { id: d.user?.id, username: d.user?.username, email: d.user?.email },
     }));
   }
 
   async deleteDocument(docId: number) {
-    const document = await this.documentRepository.findOne({
-      where: { id: docId },
-    });
+    const doc = await this.documentRepository.findOne({ where: { id: docId } });
+    if (!doc) throw new NotFoundException(`Hujjat ID ${docId} topilmadi`);
 
-    if (!document) {
-      throw new NotFoundException(`Hujjat ID ${docId} topilmadi`);
-    }
-
-    const fileName = document.fileUrl.split('/').pop();
+    const fileName = doc.fileUrl.split('/').pop();
     if (fileName) {
       const filePath = join(process.cwd(), 'uploads', fileName);
-      try {
-        await unlink(filePath);
-      } catch (err) {
-        console.warn(`Fayl o‘chirilmadi: ${filePath}`, err.message);
-      }
+      await unlink(filePath).catch(() => {});
     }
 
-    await this.documentRepository.remove(document);
-
-    return { message: 'Hujjat muvaffaqiyatli o‘chirildi' };
+    await this.documentRepository.remove(doc);
+    return { message: 'Hujjat o‘chirildi' };
   }
 }
