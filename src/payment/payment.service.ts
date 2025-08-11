@@ -30,6 +30,86 @@ export class PaymentsService {
     axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
   }
 
+  async getCustomerAndMerchantData(token: string) {
+    const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
+    const bankCode = this.configService.get<string>('TOCHKA_BANK_CODE') || '044525104';
+
+    if (!customerCode || !bankCode) {
+      this.logger.error(`TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE .env faylida topilmadi: customerCode=${customerCode}, bankCode=${bankCode}`);
+      throw new BadRequestException('TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE topilmadi');
+    }
+
+    try {
+      this.logger.log(`Tochka API customer ma'lumotlari so'ralmoqda: https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`);
+      const customersResponse = await axios.get(
+        `https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      ).catch(err => {
+        const status = err.response?.status || 'unknown';
+        const responseData = JSON.stringify(err.response?.data || {});
+        this.logger.error(`Customer API xatosi: status=${status}, response=${responseData}, message=${err.message}`);
+        if (status === 403) {
+          throw new UnauthorizedException('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak. Dokumentatsiyani tekshiring: https://enter.tochka.com/doc/v2/redoc');
+        }
+        if (status === 401) {
+          throw new UnauthorizedException('Token yaroqsiz yoki muddati tugagan');
+        }
+        if (status === 404) {
+          throw new NotFoundException(`Customer topilmadi: customerCode=${customerCode}, bankCode=${bankCode}`);
+        }
+        if (status === 400) {
+          throw new BadRequestException(`So'rov formati noto'g'ri: ${responseData}`);
+        }
+        throw new BadRequestException(`Customer API xatosi: ${err.message}, status=${status}`);
+      });
+
+      this.logger.log(`Customer javobi: ${JSON.stringify(customersResponse.data)}`);
+      const customerData = customersResponse.data.Data;
+      if (customerData.customerType !== 'Business') {
+        this.logger.error('Business customer topilmadi');
+        throw new NotFoundException('Business customer topilmadi');
+      }
+
+      this.logger.log(`Tochka API retailers ma'lumotlari so'ralmoqda: https://enter.tochka.com/uapi/acquiring/v1.0/retailers?customerCode=${customerCode}`);
+      const retailersResponse = await axios.get(
+        `https://enter.tochka.com/uapi/acquiring/v1.0/retailers?customerCode=${customerCode}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      ).catch(err => {
+        const status = err.response?.status || 'unknown';
+        const responseData = JSON.stringify(err.response?.data || {});
+        this.logger.error(`Retailers API xatosi: status=${status}, response=${responseData}, message=${err.message}`);
+        if (status === 403) {
+          throw new UnauthorizedException('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak. Dokumentatsiyani tekshiring: https://enter.tochka.com/doc/v2/redoc');
+        }
+        if (status === 400) {
+          throw new BadRequestException(`So'rov formati noto'g'ri: ${responseData}`);
+        }
+        throw new BadRequestException(`Retailers API xatosi: ${err.message}, status=${status}`);
+      });
+
+      this.logger.log(`Retailers javobi: ${JSON.stringify(retailersResponse.data)}`);
+      const merchant = retailersResponse.data.Data?.Merchants?.find(
+        (r: any) => r.status === 'REG' && r.isActive,
+      );
+      if (!merchant?.merchantId) {
+        this.logger.error('Faol merchantId topilmadi');
+        throw new NotFoundException('Faol merchantId topilmadi');
+      }
+
+      return { customerCode: customerData.customerCode, merchantId: merchant.merchantId };
+    } catch (err) {
+      this.logger.error(`Tochka API xatosi: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
+      throw new BadRequestException(`Tochka API xatosi: ${err.message}`);
+    }
+  }
+
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
     this.logger.log(`To‘lov boshlanmoqda: userId=${userId}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`);
 
@@ -91,24 +171,23 @@ export class PaymentsService {
     this.logger.log(`To‘lov yaratildi: paymentId=${savedPayment.id}, transactionId=${transactionId}`);
 
     const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
-    const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
-    const clientId = this.configService.get<string>('TOCHKA_CLIENT_ID');
-    const paymentMethods = this.configService.get<string>('TOCHKA_PAYMENT_METHODS')?.split(',') || ['CARD', 'SBP'];
-
-    if (!token || !customerCode || !clientId) {
-      this.logger.error(`Tochka sozlamalari yetishmayapti: token=${!!token}, customerCode=${customerCode}, clientId=${clientId}`);
-      throw new BadRequestException('Tochka JWT token, customerCode yoki clientId topilmadi');
+    if (!token) {
+      this.logger.error('Tochka JWT token topilmadi');
+      throw new BadRequestException('Tochka JWT token topilmadi');
     }
 
+    const { customerCode, merchantId } = await this.getCustomerAndMerchantData(token);
+    const paymentMethods = this.configService.get<string>('TOCHKA_PAYMENT_METHODS')?.split(',') || ['CARD', 'SBP'];
+
     try {
-      this.logger.log(`Tochka API payment-links endpointiga so‘rov yuborilmoqda: https://enter.tochka.com/uapi/acquiring/v1.0/payment-links`);
+      this.logger.log(`Tochka API payment-links endpointiga so‘rov yuborilmoqda: https://enter.tochka.com/uapi/sbp/v1.0/payment-links`);
       const paymentResponse = await axios.post(
-        'https://enter.tochka.com/uapi/acquiring/v1.0/payment-links',
+        'https://enter.tochka.com/uapi/sbp/v1.0/payment-links',
         {
           amount: category.price,
           currency: 'RUB',
           customerCode,
-          clientId,
+          merchantId,
           description: `Kurs: ${course.name}, Kategoriya: ${category.name}, Daraja: ${degree}`,
           successUrl: 'https://aplusacademy.ru/success',
           failUrl: 'https://aplusacademy.ru/fail',
@@ -127,13 +206,10 @@ export class PaymentsService {
         const responseData = JSON.stringify(err.response?.data || {});
         this.logger.error(`To‘lov havolasi yaratishda xato: status=${status}, response=${responseData}, message=${err.message}`);
         if (status === 403) {
-          throw new UnauthorizedException('Token ruxsatlari yetarli emas: MakeAcquiringOperation ruxsati kerak');
+          throw new UnauthorizedException('Token ruxsatlari yetarli emas: MakeAcquiringOperation ruxsati kerak. Dokumentatsiyani tekshiring: https://enter.tochka.com/doc/v2/redoc');
         }
         if (status === 400) {
           throw new BadRequestException(`So'rov formati noto'g'ri: ${responseData}`);
-        }
-        if (status === 501) {
-          throw new BadRequestException('API endpoint qo‘llab-quvvatlanmaydi. Bank bilan bog‘laning');
         }
         throw new BadRequestException(`To‘lov havolasi yaratishda xato: ${err.message}, status=${status}`);
       });
