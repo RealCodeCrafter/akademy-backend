@@ -23,6 +23,7 @@ export class PaymentsController {
 
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  // Старт платежа: возвращаем ссылку для фронта
   @UseGuards(AuthGuard)
   @Post('start')
   async startPayment(
@@ -30,41 +31,27 @@ export class PaymentsController {
     @Req() req: AuthenticatedRequest,
   ) {
     const userId = req.user?.sub;
-
-    if (!userId) {
-      this.logger.error('Foydalanuvchi aniqlanmadi: Auth token noto‘g‘ri yoki yo‘q');
-      throw new UnauthorizedException('Foydalanuvchi aniqlanmadi');
-    }
-
-    this.logger.log(`To‘lov boshlash so‘rovi: userId=${userId}, payload=${JSON.stringify(createPaymentDto)}`);
+    if (!userId) throw new UnauthorizedException('Пользователь не авторизован');
 
     try {
-      const result = await this.paymentsService.startPayment(createPaymentDto, userId);
-      this.logger.log(`To‘lov muvaffaqiyatli boshlandi: paymentId=${result.paymentId}, transactionId=${result.transactionId}`);
-      return result;
+      return await this.paymentsService.startPayment(createPaymentDto, userId);
     } catch (err) {
-      this.logger.error(`To‘lov boshlashda xato: ${err.message}`);
+      this.logger.error(`Ошибка старта платежа: ${err.message}`);
       throw err;
     }
   }
 
+  // Webhook от банка
   @Post('callback')
   async handleCallback(@Body() body: any) {
-    const callbackData = typeof body === 'string' ? body : body?.callbackData || JSON.stringify(body);
+    const callbackData = typeof body === 'string' ? body : body?.callbackData;
 
-    this.logger.log(`Webhook so‘rovi keldi: ${callbackData}`);
-
-    if (!callbackData) {
-      this.logger.error('callbackData taqdim etilmadi yoki bo‘sh');
-      throw new BadRequestException('callbackData taqdim etilmadi');
-    }
+    if (!callbackData) throw new BadRequestException('callbackData отсутствует');
 
     try {
-      const result = await this.paymentsService.handleCallback(callbackData);
-      this.logger.log(`Webhook muvaffaqiyatli qayta ishlendi: ${JSON.stringify(result)}`);
-      return result;
+      return await this.paymentsService.handleCallback(callbackData);
     } catch (err) {
-      this.logger.error(`Webhook qayta ishlashda xato: ${err.message}`);
+      this.logger.error(`Ошибка webhook: ${err.message}`);
       throw err;
     }
   }

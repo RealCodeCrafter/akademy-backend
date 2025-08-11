@@ -13,30 +13,24 @@ export class PaymentsCronService {
     private paymentRepository: Repository<Payment>,
   ) {}
 
+  // Очистка pending платежей старше 24 часов (включая фейковые)
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async cleanPendingPayments() {
-    const thresholdDate = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 soatdan ortiq
+    const thresholdDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     try {
       const oldPayments = await this.paymentRepository.find({
-        where: {
-          status: 'pending',
-          createdAt: LessThan(thresholdDate),
-        },
+        where: { status: 'pending', createdAt: LessThan(thresholdDate) },
       });
 
       if (oldPayments.length > 0) {
-        await this.paymentRepository.delete({
-          status: 'pending',
-          createdAt: LessThan(thresholdDate),
-        });
-
-        this.logger.log(`🧹 ${oldPayments.length} ta eski pending to‘lov tozalandi`);
+        await this.paymentRepository.delete({ status: 'pending', createdAt: LessThan(thresholdDate) });
+        this.logger.log(`Очищено ${oldPayments.length} старых pending платежей`);
       } else {
-        this.logger.log('✅ Tozalash uchun eski pending to‘lovlar topilmadi');
+        this.logger.log('Нет старых pending платежей');
       }
     } catch (err) {
-      this.logger.error(`❌ Pending to‘lovlarni tozalashda xato: ${err.message}, stack: ${err.stack}`);
+      this.logger.error(`Ошибка очистки: ${err.message}`);
     }
   }
 }
