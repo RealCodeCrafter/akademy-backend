@@ -35,12 +35,12 @@ export class PaymentsService {
     const bankCode = this.configService.get<string>('TOCHKA_BANK_CODE') || '044525104';
 
     if (!customerCode || !bankCode) {
-      this.logger.error(`TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE .env faylida topilmadi: customerCode=${customerCode}, bankCode=${bankCode}`);
-      throw new BadRequestException('TOCHKA_CUSTOMER_CODE yoki TOCHKA_BANK_CODE topilmadi');
+      this.logger.error(`TOCHKA_CUSTOMER_CODE или TOCHKA_BANK_CODE не найдены в файле .env: customerCode=${customerCode}, bankCode=${bankCode}`);
+      throw new BadRequestException('TOCHKA_CUSTOMER_CODE или TOCHKA_BANK_CODE не найдены');
     }
 
     try {
-      this.logger.log(`Tochka API customer ma'lumotlari so'ralmoqda: https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`);
+      this.logger.log(`Запрос данных клиента в Tochka API: https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`);
       const customersResponse = await axios.get(
         `https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`,
         {
@@ -49,30 +49,30 @@ export class PaymentsService {
       ).catch(err => {
         const status = err.response?.status || 'unknown';
         const responseData = JSON.stringify(err.response?.data || {});
-        this.logger.error(`Customer API xatosi: status=${status}, response=${responseData}, message=${err.message}`);
+        this.logger.error(`Ошибка API клиента: status=${status}, response=${responseData}, message=${err.message}`);
         if (status === 403) {
-          throw new UnauthorizedException('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak. Dokumentatsiyani tekshiring: https://enter.tochka.com/doc/v2/redoc');
+          throw new UnauthorizedException('Недостаточно прав токена: требуется разрешение ReadSBPData. Проверьте документацию: https://enter.tochka.com/doc/v2/redoc');
         }
         if (status === 401) {
-          throw new UnauthorizedException('Token yaroqsiz yoki muddati tugagan');
+          throw new UnauthorizedException('Токен недействителен или истёк');
         }
         if (status === 404) {
-          throw new NotFoundException(`Customer topilmadi: customerCode=${customerCode}, bankCode=${bankCode}`);
+          throw new NotFoundException(`Клиент не найден: customerCode=${customerCode}, bankCode=${bankCode}`);
         }
         if (status === 400) {
-          throw new BadRequestException(`So'rov formati noto'g'ri: ${responseData}`);
+          throw new BadRequestException(`Неверный формат запроса: ${responseData}`);
         }
-        throw new BadRequestException(`Customer API xatosi: ${err.message}, status=${status}`);
+        throw new BadRequestException(`Ошибка API клиента: ${err.message}, status=${status}`);
       });
 
-      this.logger.log(`Customer javobi: ${JSON.stringify(customersResponse.data)}`);
+      this.logger.log(`Ответ клиента: ${JSON.stringify(customersResponse.data)}`);
       const customerData = customersResponse.data.Data;
       if (customerData.customerType !== 'Business') {
-        this.logger.error('Business customer topilmadi');
-        throw new NotFoundException('Business customer topilmadi');
+        this.logger.error('Клиент типа Business не найден');
+        throw new NotFoundException('Клиент типа Business не найден');
       }
 
-      this.logger.log(`Tochka API retailers ma'lumotlari so'ralmoqda: https://enter.tochka.com/uapi/acquiring/v1.0/retailers?customerCode=${customerCode}`);
+      this.logger.log(`Запрос данных ритейлеров в Tochka API: https://enter.tochka.com/uapi/acquiring/v1.0/retailers?customerCode=${customerCode}`);
       const retailersResponse = await axios.get(
         `https://enter.tochka.com/uapi/acquiring/v1.0/retailers?customerCode=${customerCode}`,
         {
@@ -84,70 +84,70 @@ export class PaymentsService {
       ).catch(err => {
         const status = err.response?.status || 'unknown';
         const responseData = JSON.stringify(err.response?.data || {});
-        this.logger.error(`Retailers API xatosi: status=${status}, response=${responseData}, message=${err.message}`);
+        this.logger.error(`Ошибка API ритейлеров: status=${status}, response=${responseData}, message=${err.message}`);
         if (status === 403) {
-          throw new UnauthorizedException('Token ruxsatlari yetarli emas: ReadSBPData ruxsati kerak. Dokumentatsiyani tekshiring: https://enter.tochka.com/doc/v2/redoc');
+          throw new UnauthorizedException('Недостаточно прав токена: требуется разрешение ReadSBPData. Проверьте документацию: https://enter.tochka.com/doc/v2/redoc');
         }
         if (status === 400) {
-          throw new BadRequestException(`So'rov formati noto'g'ri: ${responseData}`);
+          throw new BadRequestException(`Неверный формат запроса: ${responseData}`);
         }
-        throw new BadRequestException(`Retailers API xatosi: ${err.message}, status=${status}`);
+        throw new BadRequestException(`Ошибка API ритейлеров: ${err.message}, status=${status}`);
       });
 
-      this.logger.log(`Retailers javobi: ${JSON.stringify(retailersResponse.data)}`);
+      this.logger.log(`Ответ ритейлеров: ${JSON.stringify(retailersResponse.data)}`);
       const merchant = retailersResponse.data.Data?.Merchants?.find(
         (r: any) => r.status === 'REG' && r.isActive,
       );
       if (!merchant?.merchantId) {
-        this.logger.error('Faol merchantId topilmadi');
-        throw new NotFoundException('Faol merchantId topilmadi');
+        this.logger.error('Активный merchantId не найден');
+        throw new NotFoundException('Активный merchantId не найден');
       }
 
       return { customerCode: customerData.customerCode, merchantId: merchant.merchantId };
     } catch (err) {
-      this.logger.error(`Tochka API xatosi: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
-      throw new BadRequestException(`Tochka API xatosi: ${err.message}`);
+      this.logger.error(`Ошибка API Tochka: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
+      throw new BadRequestException(`Ошибка API Tochka: ${err.message}`);
     }
   }
 
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
-    this.logger.log(`To‘lov boshlanmoqda: userId=${userId}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`);
+    this.logger.log(`Начало платежа: userId=${userId}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`);
 
     const user = await this.usersService.findOne(userId);
     if (!user) {
-      this.logger.error(`Foydalanuvchi topilmadi: userId=${userId}`);
-      throw new NotFoundException('Foydalanuvchi topilmadi');
+      this.logger.error(`Пользователь не найден: userId=${userId}`);
+      throw new NotFoundException('Пользователь не найден');
     }
 
     const course = await this.coursesService.findOne(createPaymentDto.courseId);
     if (!course) {
-      this.logger.error(`Kurs topilmadi: courseId=${createPaymentDto.courseId}`);
-      throw new NotFoundException('Kurs topilmadi');
+      this.logger.error(`Курс не найден: courseId=${createPaymentDto.courseId}`);
+      throw new NotFoundException('Курс не найден');
     }
 
     const category = await this.categoryService.findOne(createPaymentDto.categoryId);
     if (!category) {
-      this.logger.error(`Kategoriya topilmadi: categoryId=${createPaymentDto.categoryId}`);
-      throw new NotFoundException('Kategoriya topilmadi');
+      this.logger.error(`Категория не найдена: categoryId=${createPaymentDto.categoryId}`);
+      throw new NotFoundException('Категория не найдена');
     }
 
     const isCategoryLinked = course.categories?.some(cat => cat.id === category.id);
     if (!isCategoryLinked) {
-      this.logger.error(`Ushbu kursga bu kategoriya tegishli emas: courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}`);
-      throw new NotFoundException('Ushbu kursga bu kategoriya tegishli emas');
+      this.logger.error(`Эта категория не относится к данному курсу: courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}`);
+      throw new NotFoundException('Эта категория не относится к данному курсу');
     }
 
     let degree: string;
     if (createPaymentDto.levelId) {
       const level = await this.levelService.findOne(createPaymentDto.levelId);
       if (!level) {
-        this.logger.error(`Daraja topilmadi: levelId=${createPaymentDto.levelId}`);
-        throw new NotFoundException('Daraja topilmadi');
+        this.logger.error(`Уровень не найден: levelId=${createPaymentDto.levelId}`);
+        throw new NotFoundException('Уровень не найден');
       }
       const isLevelLinked = await this.categoryService.isLevelLinkedToCategory(createPaymentDto.categoryId, createPaymentDto.levelId);
       if (!isLevelLinked) {
-        this.logger.error(`Ushbu daraja bu kategoriyaga tegishli emas: categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`);
-        throw new BadRequestException('Ushbu daraja bu kategoriyaga tegishli emas');
+        this.logger.error(`Этот уровень не относится к данной категории: categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`);
+        throw new BadRequestException('Этот уровень не относится к данной категории');
       }
       degree = level.name;
     } else {
@@ -155,7 +155,7 @@ export class PaymentsService {
     }
 
     const purchase = await this.purchasesService.create(createPaymentDto, userId);
-    this.logger.log(`Xarid yaratildi: purchaseId=${purchase.id}`);
+    this.logger.log(`Покупка создана: purchaseId=${purchase.id}`);
 
     const transactionId = `txn_${Date.now()}`;
     const payment = this.paymentRepository.create({
@@ -168,19 +168,19 @@ export class PaymentsService {
     });
 
     const savedPayment = await this.paymentRepository.save(payment);
-    this.logger.log(`To‘lov yaratildi: paymentId=${savedPayment.id}, transactionId=${transactionId}`);
+    this.logger.log(`Платёж создан: paymentId=${savedPayment.id}, transactionId=${transactionId}`);
 
     const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
     if (!token) {
-      this.logger.error('Tochka JWT token topilmadi');
-      throw new BadRequestException('Tochka JWT token topilmadi');
+      this.logger.error('Токен JWT Tochka не найден');
+      throw new BadRequestException('Токен JWT Tochka не найден');
     }
 
     const { customerCode, merchantId } = await this.getCustomerAndMerchantData(token);
     const paymentMethods = this.configService.get<string>('TOCHKA_PAYMENT_METHODS')?.split(',') || ['CARD', 'SBP'];
 
     try {
-      this.logger.log(`Tochka API payment-links endpointiga so‘rov yuborilmoqda: https://enter.tochka.com/uapi/sbp/v1.0/payment-links`);
+      this.logger.log(`Отправка запроса на endpoint payment-links в Tochka API: https://enter.tochka.com/uapi/sbp/v1.0/payment-links`);
       const paymentResponse = await axios.post(
         'https://enter.tochka.com/uapi/sbp/v1.0/payment-links',
         {
@@ -188,7 +188,7 @@ export class PaymentsService {
           currency: 'RUB',
           customerCode,
           merchantId,
-          description: `Kurs: ${course.name}, Kategoriya: ${category.name}, Daraja: ${degree}`,
+          description: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
           successUrl: 'https://aplusacademy.ru/success',
           failUrl: 'https://aplusacademy.ru/fail',
           orderId: transactionId,
@@ -204,17 +204,17 @@ export class PaymentsService {
       ).catch(err => {
         const status = err.response?.status || 'unknown';
         const responseData = JSON.stringify(err.response?.data || {});
-        this.logger.error(`To‘lov havolasi yaratishda xato: status=${status}, response=${responseData}, message=${err.message}`);
+        this.logger.error(`Ошибка создания платёжной ссылки: status=${status}, response=${responseData}, message=${err.message}`);
         if (status === 403) {
-          throw new UnauthorizedException('Token ruxsatlari yetarli emas: MakeAcquiringOperation ruxsati kerak. Dokumentatsiyani tekshiring: https://enter.tochka.com/doc/v2/redoc');
+          throw new UnauthorizedException('Недостаточно прав токена: требуется разрешение MakeAcquiringOperation. Проверьте документацию: https://enter.tochka.com/doc/v2/redoc');
         }
         if (status === 400) {
-          throw new BadRequestException(`So'rov formati noto'g'ri: ${responseData}`);
+          throw new BadRequestException(`Неверный формат запроса: ${responseData}`);
         }
-        throw new BadRequestException(`To‘lov havolasi yaratishda xato: ${err.message}, status=${status}`);
+        throw new BadRequestException(`Ошибка создания платёжной ссылки: ${err.message}, status=${status}`);
       });
 
-      this.logger.log(`To‘lov havolasi yaratildi: paymentId=${savedPayment.id}, paymentUrl=${paymentResponse.data.Data.paymentLink}`);
+      this.logger.log(`Платёжная ссылка создана: paymentId=${savedPayment.id}, paymentUrl=${paymentResponse.data.Data.paymentLink}`);
       return {
         paymentUrl: paymentResponse.data.Data.paymentLink,
         paymentId: savedPayment.id,
@@ -222,36 +222,36 @@ export class PaymentsService {
         transactionId,
       };
     } catch (err) {
-      this.logger.error(`To‘lov havolasi yaratishda xato: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
-      throw new BadRequestException(`To‘lov havolasi yaratishda xato: ${err.message}`);
+      this.logger.error(`Ошибка создания платёжной ссылки: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
+      throw new BadRequestException(`Ошибка создания платёжной ссылки: ${err.message}`);
     }
   }
 
   async handleCallback(callbackData: string) {
-    this.logger.log(`Webhook keldi: ${callbackData}`);
+    this.logger.log(`Получен вебхук: ${callbackData}`);
 
     if (!callbackData) {
-      this.logger.error('callbackData parametri taqdim etilmadi');
-      throw new BadRequestException('callbackData parametri taqdim etilmadi');
+      this.logger.error('Параметр callbackData не предоставлен');
+      throw new BadRequestException('Параметр callbackData не предоставлен');
     }
 
     const publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY');
     if (!publicKey) {
-      this.logger.error('Tochka public key .env faylida topilmadi');
-      throw new BadRequestException('Tochka public key .env faylida topilmadi');
+      this.logger.error('Публичный ключ Tochka не найден в файле .env');
+      throw new BadRequestException('Публичный ключ Tochka не найден в файле .env');
     }
 
     let decoded: any;
     try {
       decoded = jwt.verify(callbackData, publicKey, { algorithms: ['RS256'] });
-      this.logger.log(`Webhook JWT muvaffaqiyatli tekshirildi: event=${decoded.event}`);
+      this.logger.log(`Вебхук JWT успешно проверен: event=${decoded.event}`);
     } catch (err) {
-      this.logger.error(`Webhook JWT tekshiruvi xato: ${err.message}`);
-      throw new BadRequestException(`Webhook JWT tekshiruvi xato: ${err.message}`);
+      this.logger.error(`Ошибка проверки вебхука JWT: ${err.message}`);
+      throw new BadRequestException(`Ошибка проверки вебхука JWT: ${err.message}`);
     }
 
     const { event, data } = decoded;
-    this.logger.log(`Webhook event: ${event}, data: ${JSON.stringify(data)}`);
+    this.logger.log(`Событие вебхука: ${event}, данные: ${JSON.stringify(data)}`);
 
     if (event === 'acquiringInternetPayment') {
       const payment = await this.paymentRepository.findOne({
@@ -259,35 +259,35 @@ export class PaymentsService {
         relations: ['purchase', 'purchase.user', 'purchase.course', 'purchase.category'],
       });
       if (!payment) {
-        this.logger.error(`To‘lov topilmadi: operationId=${data.operationId}`);
-        throw new NotFoundException('To‘lov topilmadi');
+        this.logger.error(`Платёж не найден: operationId=${data.operationId}`);
+        throw new NotFoundException('Платёж не найден');
       }
 
-      this.logger.log(`To‘lov topildi: paymentId=${payment.id}, purchaseId=${payment.purchaseId}, purchase=${JSON.stringify(payment.purchase)}`);
+      this.logger.log(`Платёж найден: paymentId=${payment.id}, purchaseId=${payment.purchaseId}, purchase=${JSON.stringify(payment.purchase)}`);
 
       if (!payment.purchase) {
-        this.logger.error(`Xarid topilmadi: purchaseId=${payment.purchaseId}`);
-        throw new NotFoundException(`Xarid topilmadi: purchaseId=${payment.purchaseId}`);
+        this.logger.error(`Покупка не найдена: purchaseId=${payment.purchaseId}`);
+        throw new NotFoundException(`Покупка не найдена: purchaseId=${payment.purchaseId}`);
       }
 
       if (data.status === 'Accepted') {
         payment.status = 'completed';
         await this.paymentRepository.save(payment);
         await this.purchasesService.confirmPurchase(payment.purchaseId);
-        this.logger.log(`To‘lov tasdiqlandi: paymentId=${payment.id}, purchaseId=${payment.purchaseId}`);
+        this.logger.log(`Платёж подтверждён: paymentId=${payment.id}, purchaseId=${payment.purchaseId}`);
         return { status: 'OK' };
       } else if (['Rejected', 'DECLINED', 'CANCELLED', 'TIMEOUT', 'ERROR'].includes(data.status)) {
         payment.status = 'failed';
         await this.paymentRepository.save(payment);
-        this.logger.log(`To‘lov rad etildi: paymentId=${payment.id}, status=${data.status}`);
+        this.logger.log(`Платёж отклонён: paymentId=${payment.id}, status=${data.status}`);
         return { status: 'OK' };
       } else {
-        this.logger.warn(`Noma’lum to‘lov statusi: ${data.status}`);
-        throw new BadRequestException(`Noma’lum to‘lov statusi: ${data.status}`);
+        this.logger.warn(`Неизвестный статус платежа: ${data.status}`);
+        throw new BadRequestException(`Неизвестный статус платежа: ${data.status}`);
       }
     }
 
-    this.logger.error(`Noma’lum webhook event turi: ${event}`);
-    throw new BadRequestException(`Noma’lum webhook event turi: ${event}`);
+    this.logger.error(`Неизвестный тип события вебхука: ${event}`);
+    throw new BadRequestException(`Неизвестный тип события вебхука: ${event}`);
   }
 }
