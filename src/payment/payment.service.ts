@@ -9,7 +9,9 @@ import { CategoryService } from '../category/category.service';
 import { PurchasesService } from '../purchases/purchases.service';
 import { LevelService } from '../level/level.service';
 import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 import * as jwt from 'jsonwebtoken';
+import axiosRetry from 'axios-retry';
 
 @Injectable()
 export class PaymentsService {
@@ -24,12 +26,13 @@ export class PaymentsService {
     private purchasesService: PurchasesService,
     private levelService: LevelService,
     private configService: ConfigService,
-  ) {}
+  ) {
+    axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
+  }
 
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
     this.logger.log(`To‘lov boshlanmoqda: userId=${userId}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`);
 
-    // 1) Validatsiya: user, course, category, level
     const user = await this.usersService.findOne(userId);
     if (!user) {
       this.logger.error(`Foydalanuvchi topilmadi: userId=${userId}`);
@@ -51,7 +54,7 @@ export class PaymentsService {
     const isCategoryLinked = course.categories?.some(cat => cat.id === category.id);
     if (!isCategoryLinked) {
       this.logger.error(`Ushbu kursga bu kategoriya tegishli emas: courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}`);
-      throw new BadRequestException('Ushbu kursga bu kategoriya tegishli emas');
+      throw new NotFoundException('Ushbu kursga bu kategoriya tegishli emas');
     }
 
     let degree: string;
@@ -71,7 +74,6 @@ export class PaymentsService {
       degree = category.name;
     }
 
-    // 2) Purchase & Payment yozuvlari
     const purchase = await this.purchasesService.create(createPaymentDto, userId);
     this.logger.log(`Xarid yaratildi: purchaseId=${purchase.id}`);
 
@@ -84,40 +86,54 @@ export class PaymentsService {
       purchaseId: purchase.id,
       purchase,
     });
+
     const savedPayment = await this.paymentRepository.save(payment);
-    this.logger.log(`To‘lov yozuvi yaratildi: paymentId=${savedPayment.id}, transactionId=${transactionId}`);
+    this.logger.log(`To‘lov yaratildi: paymentId=${savedPayment.id}, transactionId=${transactionId}`);
 
-    // 3) Konfiguratsiya tekshiruvi
     const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
+    const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
     const clientId = this.configService.get<string>('TOCHKA_CLIENT_ID');
-    const paymentUrl = this.configService.get<string>('TOCHKA_PAYMENT_URL');
 
-    if (!token || !clientId || !paymentUrl) {
-      this.logger.error(`Tochka sozlamalari yetishmayapti: token=${!!token}, clientId=${clientId}, paymentUrl=${paymentUrl}`);
-      throw new BadRequestException('Tochka JWT token, clientId yoki paymentUrl topilmadi');
+    if (!token || !customerCode || !clientId) {
+      this.logger.error(`Tochka sozlamalari yetishmayapti: token=${!!token}, customerCode=${customerCode}, clientId=${clientId}`);
+      throw new BadRequestException('Tochka JWT token, customerCode yoki clientId topilmadi');
     }
 
-    // 4) JWT tokenni tekshirish
-    let decoded: any;
     try {
-      decoded = jwt.decode(token);
-      if (!decoded || decoded.iss !== clientId) {
-        this.logger.error(`JWT token noto‘g‘ri: iss=${decoded?.iss}, clientId=${clientId}`);
-        throw new BadRequestException('JWT token bilan clientId mos emas');
-      }
-    } catch (err) {
-      this.logger.error(`JWT token dekodlashda xato: ${err.message}`);
-      throw new BadRequestException(`JWT token dekodlashda xato: ${err.message}`);
-    }
+      this.logger.log(`Tochka API payments endpointiga so‘rov yuborilmoqda: https://enter.tochka.com/api/sbp/v1.0/payments`);
+      const paymentResponse = await axios.post(
+        'https://enter.tochka.com/api/sbp/v1.0/payments',
+        {
+          amount: category.price,
+          currency: 'RUB',
+          customerCode,
+          clientId,
+          description: `Kurs: ${course.name}, Kategoriya: ${category.name}, Daraja: ${degree}`,
+          orderId: transactionId,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            CustomerCode: customerCode,
+          },
+        },
+      );
 
-    // 5) Statik to‘lov havolasini qaytarish
-    this.logger.log(`Statik to‘lov havolasi qaytarilmoqda: paymentUrl=${paymentUrl}, paymentId=${savedPayment.id}`);
-    return {
-      paymentUrl,
-      paymentId: savedPayment.id,
-      purchaseId: purchase.id,
-      transactionId,
-    };
+      const paymentUrl = paymentResponse.data.Data?.paymentLink || paymentResponse.data.Data?.qrUrl || paymentResponse.data.paymentLink;
+      this.logger.log(`To‘lov havolasi qabul qilindi: paymentId=${savedPayment.id}, paymentUrl=${paymentUrl}`);
+      return {
+        paymentUrl,
+        paymentId: savedPayment.id,
+        purchaseId: purchase.id,
+        transactionId,
+      };
+    } catch (err) {
+      const status = err.response?.status || 'unknown';
+      const responseData = JSON.stringify(err.response?.data || {});
+      this.logger.error(`To‘lov havolasi qabul qilishda xato: status=${status}, response=${responseData}, message=${err.message}`);
+      throw new BadRequestException(`To‘lov havolasi qabul qilishda xato: ${err.message}, status=${status}, response=${responseData}`);
+    }
   }
 
   async handleCallback(callbackData: string) {
@@ -131,59 +147,56 @@ export class PaymentsService {
     const publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY');
     if (!publicKey) {
       this.logger.error('Tochka public key .env faylida topilmadi');
-      throw new BadRequestException('Tochka public key topilmadi');
+      throw new BadRequestException('Tochka public key .env faylida topilmadi');
     }
 
     let decoded: any;
     try {
       decoded = jwt.verify(callbackData, publicKey, { algorithms: ['RS256'] });
-      this.logger.log(`Webhook JWT muvaffaqiyatli tekshirildi: event=${decoded?.event || 'unknown'}`);
+      this.logger.log(`Webhook JWT muvaffaqiyatli tekshirildi: event=${decoded.event}`);
     } catch (err) {
-      this.logger.error(`Webhook JWT tekshiruvida xato: ${err.message}`);
-      throw new BadRequestException(`Webhook JWT tekshiruvida xato: ${err.message}`);
+      this.logger.error(`Webhook JWT tekshiruvi xato: ${err.message}`);
+      throw new BadRequestException(`Webhook JWT tekshiruvi xato: ${err.message}`);
     }
 
     const { event, data } = decoded;
-    this.logger.debug(`Webhook payload: event=${event}, data=${JSON.stringify(data)}`);
+    this.logger.log(`Webhook event: ${event}, data: ${JSON.stringify(data)}`);
 
-    if (!event || !data) {
-      this.logger.error('Webhook payloadda event yoki data mavjud emas');
-      throw new BadRequestException('Webhook payload noto‘g‘ri formatda');
+    if (event === 'acquiringInternetPayment') {
+      const payment = await this.paymentRepository.findOne({
+        where: { transactionId: data.operationId },
+        relations: ['purchase', 'purchase.user', 'purchase.course', 'purchase.category'],
+      });
+      if (!payment) {
+        this.logger.error(`To‘lov topilmadi: operationId=${data.operationId}`);
+        throw new NotFoundException('To‘lov topilmadi');
+      }
+
+      this.logger.log(`To‘lov topildi: paymentId=${payment.id}, purchaseId=${payment.purchaseId}, purchase=${JSON.stringify(payment.purchase)}`);
+
+      if (!payment.purchase) {
+        this.logger.error(`Xarid topilmadi: purchaseId=${payment.purchaseId}`);
+        throw new NotFoundException(`Xarid topilmadi: purchaseId=${payment.purchaseId}`);
+      }
+
+      if (data.status === 'Accepted') {
+        payment.status = 'completed';
+        await this.paymentRepository.save(payment);
+        await this.purchasesService.confirmPurchase(payment.purchaseId);
+        this.logger.log(`To‘lov tasdiqlandi: paymentId=${payment.id}, purchaseId=${payment.purchaseId}`);
+        return { status: 'OK' };
+      } else if (['Rejected', 'DECLINED', 'CANCELLED', 'TIMEOUT', 'ERROR'].includes(data.status)) {
+        payment.status = 'failed';
+        await this.paymentRepository.save(payment);
+        this.logger.log(`To‘lov rad etildi: paymentId=${payment.id}, status=${data.status}`);
+        return { status: 'OK' };
+      } else {
+        this.logger.warn(`Noma’lum to‘lov statusi: ${data.status}`);
+        throw new BadRequestException(`Noma’lum to‘lov statusi: ${data.status}`);
+      }
     }
 
-    const operationId = data.operationId || data.paymentId || data.orderId || data.id;
-    if (!operationId) {
-      this.logger.error('Webhook data ichida operationId/paymentId/orderId topilmadi');
-      throw new BadRequestException('Webhook data ichida operationId/paymentId/orderId topilmadi');
-    }
-
-    const payment = await this.paymentRepository.findOne({
-      where: { transactionId: operationId },
-      relations: ['purchase', 'purchase.user', 'purchase.course', 'purchase.category'],
-    });
-
-    if (!payment) {
-      this.logger.error(`To‘lov topilmadi: operationId=${operationId}`);
-      throw new NotFoundException('To‘lov topilmadi');
-    }
-
-    this.logger.log(`To‘lov topildi: paymentId=${payment.id}, purchaseId=${payment.purchaseId}`);
-
-    const statusFromBank = (data.status || '').toString();
-    if (['Accepted', 'SUCCESS', 'COMPLETED'].includes(statusFromBank)) {
-      payment.status = 'completed';
-      await this.paymentRepository.save(payment);
-      await this.purchasesService.confirmPurchase(payment.purchaseId);
-      this.logger.log(`To‘lov tasdiqlandi: paymentId=${payment.id}, purchaseId=${payment.purchaseId}`);
-      return { status: 'OK' };
-    } else if (['Rejected', 'DECLINED', 'CANCELLED', 'TIMEOUT', 'ERROR', 'FAILED'].includes(statusFromBank)) {
-      payment.status = 'failed';
-      await this.paymentRepository.save(payment);
-      this.logger.log(`To‘lov rad etildi: paymentId=${payment.id}, status=${statusFromBank}`);
-      return { status: 'OK' };
-    } else {
-      this.logger.warn(`Noma’lum to‘lov statusi: ${statusFromBank}`);
-      return { status: 'OK', note: `Unknown bank status: ${statusFromBank}` };
-    }
+    this.logger.error(`Noma’lum webhook event turi: ${event}`);
+    throw new BadRequestException(`Noma’lum webhook event turi: ${event}`);
   }
 }
