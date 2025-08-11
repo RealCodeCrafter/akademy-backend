@@ -100,25 +100,30 @@ export class PaymentsService {
     }
 
     try {
-      this.logger.log(`Tochka API payments endpointiga so‘rov yuborilmoqda: https://enter.tochka.com/uapi/acquiring/v1.0/payments`);
-      const paymentResponse = await axios.post(
-        'https://enter.tochka.com/uapi/acquiring/v1.0/payments',
-        {
-          amount: category.price,
-          currency: 'RUB',
-          customerCode,
-          clientId,
-          description: `Kurs: ${course.name}, Kategoriya: ${category.name}, Daraja: ${degree}`,
-          orderId: transactionId,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            CustomerCode: customerCode,
-          },
-        },
-      );
+   this.logger.log(`Tochka API payments endpointiga so‘rov yuborilmoqda: https://enter.tochka.com/uapi/acquiring/v1.0/payments`);
+
+const body = {
+  Data: {
+    amount: category.price,
+    currency: 'RUB',
+    paymentPurpose: `Kurs: ${course.name}, Kategoriya: ${category.name}, Daraja: ${degree}`,
+    orderId: transactionId
+  },
+};
+
+const paymentResponse = await axios.post(
+  'https://enter.tochka.com/uapi/acquiring/v1.0/payments',
+  body,
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      CustomerCode: customerCode,
+    },
+    timeout: 15000,
+  },
+);
+
 
       const paymentUrl = paymentResponse.data.Data?.paymentLink || paymentResponse.data.Data?.qrUrl || paymentResponse.data.paymentLink || paymentResponse.data.qrUrl;
       if (!paymentUrl) {
