@@ -40,9 +40,18 @@ import { LevelModule } from './level/level.module';
       }),
     }),
 
-    ServeStaticModule.forRoot({
-        rootPath: join(process.cwd(), 'uploads'), 
-      serveRoot: '/uploads',
+    ServeStaticModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => [
+        {
+          rootPath: join(process.cwd(), 'uploads'),
+          serveRoot: '/uploads',
+          serveStaticOptions: {
+            index: false,
+          },
+        },
+      ],
     }),
 
     AuthModule,

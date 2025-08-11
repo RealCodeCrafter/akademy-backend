@@ -16,10 +16,14 @@ import { memoryStorage } from 'multer';
 import { Response } from 'express';
 import { extname, join } from 'path';
 import { existsSync } from 'fs';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('documents')
 export class DocumentsController {
-  constructor(private documentsService: DocumentsService) {}
+  constructor(
+    private documentsService: DocumentsService,
+    private configService: ConfigService,
+  ) {}
 
   @Post(':userId/upload')
   @UseInterceptors(
@@ -59,10 +63,11 @@ export class DocumentsController {
 
   @Get('file/:fileName')
   getFile(@Param('fileName') fileName: string, @Res() res: Response) {
-    const filePath = join(process.cwd(), 'uploads', fileName);
+    const uploadsPath = this.configService.get<string>('UPLOADS_PATH') ?? join(process.cwd(), 'Uploads');
+    const filePath = join(uploadsPath, fileName);
 
     if (!existsSync(filePath)) {
-      throw new NotFoundException('Fayl topilmadi');
+      throw new NotFoundException(`Fayl topilmadi: ${fileName}`);
     }
 
     return res.sendFile(filePath);
