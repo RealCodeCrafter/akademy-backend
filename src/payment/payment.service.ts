@@ -30,6 +30,39 @@ export class PaymentsService {
     axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
   }
 
+  async getAccessToken(): Promise<string> {
+    const clientId = this.configService.get<string>('TOCHKA_CLIENT_ID');
+    const clientSecret = this.configService.get<string>('TOCHKA_CLIENT_SECRET');
+
+    if (!clientId || !clientSecret) {
+      this.logger.error('TOCHKA_CLIENT_ID или TOCHKA_CLIENT_SECRET не найдены в .env');
+      throw new BadRequestException('TOCHKA_CLIENT_ID или TOCHKA_CLIENT_SECRET не найдены');
+    }
+
+    try {
+      const response = await axios.post(
+        'https://enter.tochka.com/connect/token',
+        new URLSearchParams({
+          grant_type: 'client_credentials',
+          client_id: clientId,
+          client_secret: clientSecret,
+          scope: 'ReadAccountsBasic ReadAccountsDetail MakeAcquiringOperation ReadAcquiringData ReadBalances ReadStatements ReadCustomerData ReadSBPData EditSBPData CreatePaymentForSign CreatePaymentOrder ManageWebhookData ManageInvoiceData',
+        }),
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        },
+      );
+
+      this.logger.log(`Получен новый Access Token Client: expires_in=${response.data.expires_in}`);
+      return response.data.access_token;
+    } catch (err) {
+      this.logger.error(`Ошибка получения токена: ${err.message}`);
+      throw new BadRequestException(`Ошибка получения токена: ${err.message}`);
+    }
+  }
+
   async getCustomerAndMerchantData(token: string) {
     const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
     const bankCode = this.configService.get<string>('TOCHKA_BANK_CODE') || '044525104';
@@ -170,10 +203,9 @@ export class PaymentsService {
     const savedPayment = await this.paymentRepository.save(payment);
     this.logger.log(`Платёж создан: paymentId=${savedPayment.id}, transactionId=${transactionId}`);
 
-    const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
+    let token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
     if (!token) {
-      this.logger.error('Токен JWT Tochka не найден');
-      throw new BadRequestException('Токен JWT Tochka не найден');
+      token = await this.getAccessToken(); // Получаем новый токен, если не найден в .env
     }
 
     const { customerCode, merchantId } = await this.getCustomerAndMerchantData(token);
