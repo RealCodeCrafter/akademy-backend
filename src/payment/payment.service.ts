@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Payment } from './entities/payment.entity';
@@ -122,9 +122,23 @@ export class PaymentsService {
             CustomerCode: customerCode,
           },
         },
-      );
+      ).catch(err => {
+        const status = err.response?.status || 'unknown';
+        const responseData = JSON.stringify(err.response?.data || {});
+        this.logger.error(`To‘lov havolasi yaratishda xato: status=${status}, response=${responseData}, message=${err.message}`);
+        if (status === 403) {
+          throw new UnauthorizedException('Token ruxsatlari yetarli emas: MakeAcquiringOperation ruxsati kerak');
+        }
+        if (status === 400) {
+          throw new BadRequestException(`So'rov formati noto'g'ri: ${responseData}`);
+        }
+        if (status === 501) {
+          throw new BadRequestException('API endpoint qo‘llab-quvvatlanmaydi. Bank bilan bog‘laning');
+        }
+        throw new BadRequestException(`To‘lov havolasi yaratishda xato: ${err.message}, status=${status}`);
+      });
 
-      this.logger.log(`To‘lov havolasi qabul qilindi: paymentId=${savedPayment.id}, paymentUrl=${paymentResponse.data.Data.paymentLink}`);
+      this.logger.log(`To‘lov havolasi yaratildi: paymentId=${savedPayment.id}, paymentUrl=${paymentResponse.data.Data.paymentLink}`);
       return {
         paymentUrl: paymentResponse.data.Data.paymentLink,
         paymentId: savedPayment.id,
@@ -132,10 +146,8 @@ export class PaymentsService {
         transactionId,
       };
     } catch (err) {
-      const status = err.response?.status || 'unknown';
-      const responseData = JSON.stringify(err.response?.data || {});
-      this.logger.error(`To‘lov havolasi yaratishda xato: status=${status}, response=${responseData}, message=${err.message}`);
-      throw new BadRequestException(`To‘lov havolasi yaratishda xato: ${err.message}, status=${status}, response=${responseData}`);
+      this.logger.error(`To‘lov havolasi yaratishda xato: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
+      throw new BadRequestException(`To‘lov havolasi yaratishda xato: ${err.message}`);
     }
   }
 
