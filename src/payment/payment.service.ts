@@ -35,7 +35,7 @@ export class PaymentsService {
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
     this.logger.log(`Старт платежа: userId=${userId}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`);
 
-    // --- Курс, категория, уровень текширишлари (o'zgartirmadim) ---
+    // Kurs, category va level tekshiruvlari (o'zgarmaydi)
     const user = await this.usersService.findOne(userId);
     if (!user) throw new NotFoundException('Пользователь не найден');
 
@@ -58,9 +58,8 @@ export class PaymentsService {
     } else {
       degree = category.name;
     }
-    // --- Tekshiruvlar tugadi ---
 
-    // --- Purchase va Payment yaratish ---
+    // Purchase va Payment yaratish
     const purchase = await this.purchasesService.create(createPaymentDto, userId);
     this.logger.log(`Покупка создана: purchaseId=${purchase.id}`);
 
@@ -76,17 +75,18 @@ export class PaymentsService {
     const savedPayment = await this.paymentRepository.save(payment);
     this.logger.log(`Платеж создан: paymentId=${savedPayment.id}, transactionId=${transactionId}`);
 
-    // --- Bank API ga so‘rov uchun env dan parametrlar ---
+    // Faqat JWT va clientId olamiz, merchantId va accountId yo'q!
     const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
     const clientId = this.configService.get<string>('TOCHKA_CLIENT_ID');
-    const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID');
-    const accountId = this.configService.get<string>('TOCHKA_ACCOUNT_ID');
     const redirectUrl = this.configService.get<string>('TOCHKA_REDIRECT_URL') || 'https://a-plus-academy.com/success';
 
     if (!token || !clientId) throw new InternalServerErrorException('JWT токен или clientId не найдены');
-    if (!merchantId || !accountId) throw new InternalServerErrorException('merchantId или accountId не настроены');
 
-    // --- Формируем тело запроса на создание платежной ссылки ---
+    // Bank API endpoint (merchantId va accountId holda)
+    // Sizning bank API docs ga qarab endpointni shunday sozlash kerak, 
+    // misol uchun to‘g‘ri url mana bunday bo‘lishi mumkin (agar bank ruxsat bersa):
+    const url = `${this.baseUrl}/sbp/${this.apiVersion}/qr-code/client/${clientId}`;
+
     const body = {
       Data: {
         amount: category.price,
@@ -99,8 +99,6 @@ export class PaymentsService {
         redirectUrl,
       },
     };
-
-    const url = `${this.baseUrl}/sbp/${this.apiVersion}/qr-code/merchant/${merchantId}/${accountId}`;
 
     try {
       const response = await axios.post(url, body, {
@@ -121,7 +119,7 @@ export class PaymentsService {
       await this.paymentRepository.save(savedPayment);
 
       return {
-        paymentUrl,       // Frontend shu linkga yo'naltiradi
+        paymentUrl,
         paymentId: savedPayment.id,
         purchaseId: purchase.id,
         transactionId: qrcId,
@@ -132,7 +130,7 @@ export class PaymentsService {
     }
   }
 
-  // To‘lov holatini tekshirish uchun alohida funksiya
+  // To‘lov holatini tekshirish
   async getPaymentStatus(paymentId: number) {
     const payment = await this.paymentRepository.findOne({ where: { id: paymentId } });
     if (!payment) throw new NotFoundException('Платеж не найден');
@@ -143,7 +141,7 @@ export class PaymentsService {
     };
   }
 
-  // Webhook uchun callback handler (bankdan keladigan statusni qabul qiladi)
+  // Webhook callback
   async handleCallback(callbackData: string) {
     this.logger.log('Webhook получен');
 
@@ -159,7 +157,7 @@ export class PaymentsService {
 
     const { event, data } = decoded;
     if (!event || !data || (event !== 'incomingSbpPayment' && event !== 'incomingSbpB2BPayment')) {
-      return { status: 'OK' }; // Игнорируем нерелевантные события
+      return { status: 'OK' };
     }
 
     const qrcId = data.qrcId;
