@@ -137,27 +137,33 @@ export class PaymentsService {
     }
 
     try {
-      this.logger.log(`Отправка запроса на регистрацию QR-кода в Tochka API: https://enter.tochka.com/uapi/sbp/v1.0/qr-code/merchant/${merchantId}/${accountId}`);
-      const qrResponse = await axios.post(
-        `https://enter.tochka.com/uapi/sbp/v1.0/qr-code/merchant/${merchantId}/${accountId}`,
-        {
-          Data: {
-            amount: category.price,
-            currency: 'RUB',
-            paymentPurpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
-            qrcType: '02', // Динамический QR-код
-            imageParams: {},
-            sourceName: 'APlus Academy',
-            ttl: 30, // 30 минут
-            redirectUrl: 'https://aplusacademy.ru/success',
-          },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        },
+     this.logger.log(
+  `Отправка запроса на регистрацию QR-кода в Tochka API: https://enter.tochka.com/uapi/sbp/v1.0/qr-code/merchant/${merchantId}/${accountId}`
+);
+
+const qrResponse = await axios.post(
+  `https://enter.tochka.com/uapi/sbp/v1.0/qr-code/merchant/${merchantId}/${accountId}`,
+  {
+    Data: {
+      amount: category.price,
+      currency: 'RUB',
+      paymentPurpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
+      qrcType: '02',
+      imageParams: {
+        width: 300, 
+        height: 300,
+      },
+      sourceName: 'APlus Academy',
+      ttl: 30,
+      redirectUrl: 'https://aplusacademy.ru/success',
+    },
+  },
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  }
       ).catch(err => {
         const status = err.response?.status || 'unknown';
         const responseData = JSON.stringify(err.response?.data || {});
