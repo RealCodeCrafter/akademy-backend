@@ -111,7 +111,7 @@ export class PaymentsService {
             purpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
             redirectUrl: 'https://aplusacademy.ru/',
             failRedirectUrl: 'https://aplusacademy.ru/fail',
-            paymentMode: ["card", "sbp"],
+            paymentMode: ["card"],
             saveCard: false,
             merchantId: merchantId,
             preAuthorization: false,
