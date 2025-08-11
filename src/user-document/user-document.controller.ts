@@ -14,16 +14,11 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './user-document.service';
 import { memoryStorage } from 'multer';
 import { Response } from 'express';
-import { extname, join } from 'path';
-import { existsSync } from 'fs';
-import { ConfigService } from '@nestjs/config';
+import { extname } from 'path';
 
 @Controller('documents')
 export class DocumentsController {
-  constructor(
-    private documentsService: DocumentsService,
-    private configService: ConfigService,
-  ) {}
+  constructor(private documentsService: DocumentsService) {}
 
   @Post(':userId/upload')
   @UseInterceptors(
@@ -33,7 +28,7 @@ export class DocumentsController {
         const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
         if (!allowedTypes.includes(extname(file.originalname).toLowerCase())) {
           return cb(
-            new Error('Faqat PDF, DOC, DOCX, JPG, JPEG, PNG fayllar ruxsat etiladi'),
+            new BadRequestException('Faqat PDF, DOC, DOCX, JPG, JPEG, PNG fayllar ruxsat etiladi'),
             false,
           );
         }
@@ -61,16 +56,21 @@ export class DocumentsController {
     return this.documentsService.findAll();
   }
 
-  @Get('file/:fileName')
-  getFile(@Param('fileName') fileName: string, @Res() res: Response) {
-    const uploadsPath = this.configService.get<string>('UPLOADS_PATH') ?? join(process.cwd(), 'Uploads');
-    const filePath = join(uploadsPath, fileName);
-
-    if (!existsSync(filePath)) {
-      throw new NotFoundException(`Fayl topilmadi: ${fileName}`);
+  @Get('file/:docId')
+  async getFile(@Param('docId') docId: string, @Res() res: Response) {
+    try {
+      const { buffer, fileName, mimeType } = await this.documentsService.getFileBuffer(+docId);
+      res.set({
+        'Content-Type': mimeType,
+        'Content-Disposition': `attachment; filename="${fileName}"`,
+      });
+      res.send(buffer);
+    } catch (err) {
+      if (err.status === 404) {
+        throw new NotFoundException(err.message);
+      }
+      throw new BadRequestException(err.message);
     }
-
-    return res.sendFile(filePath);
   }
 
   @Delete(':docId')

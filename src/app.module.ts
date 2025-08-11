@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ServeStaticModule } from '@nestjs/serve-static';
-import { join } from 'path';
 
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './user/user.module';
@@ -38,20 +36,6 @@ import { LevelModule } from './level/level.module';
           rejectUnauthorized: false,
         },
       }),
-    }),
-
-    ServeStaticModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => [
-        {
-          rootPath: join(process.cwd(), 'uploads'),
-          serveRoot: '/uploads',
-          serveStaticOptions: {
-            index: false,
-          },
-        },
-      ],
     }),
 
     AuthModule,

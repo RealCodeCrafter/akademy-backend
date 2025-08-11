@@ -9,8 +9,8 @@ export class UserDocument {
   @Column()
   fileName: string;
 
-  @Column()
-  fileUrl: string;
+  @Column({ type: 'bytea' }) 
+  fileData: Buffer;
 
   @ManyToOne(() => User, (user) => user.documents, { onDelete: 'CASCADE' })
   user: User;
