@@ -9,7 +9,7 @@ export class UserDocument {
   @Column()
   fileName: string;
 
-  @Column({ type: 'bytea' }) 
+  @Column({ type: 'bytea' , nullable: true}) 
   fileData: Buffer;
 
   @ManyToOne(() => User, (user) => user.documents, { onDelete: 'CASCADE' })

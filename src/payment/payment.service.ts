@@ -108,6 +108,13 @@ export class PaymentsService {
     }
 
     const merchantId = await this.getMerchantId();
+    console.log(merchantId);
+    console.log(merchantId);
+    console.log(merchantId);
+    console.log(merchantId);
+    console.log(merchantId);
+    console.log(merchantId);
+    
 
     try {
       const response = await axios.post(
