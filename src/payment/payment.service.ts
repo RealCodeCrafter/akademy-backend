@@ -100,7 +100,7 @@ export class PaymentsService {
     }
 
     try {
-      const tochkaApiUrl = this.configService.get<string>('TOCHKA_PAYMENTS_URL');
+      const tochkaApiUrl = this.configService.get<string>('TOCHKA_PAYMENT_URL');
       if (!tochkaApiUrl) {
   this.logger.error('TOCHKA_PAYMENTS_URL .env faylida topilmadi');
   throw new BadRequestException('TOCHKA_PAYMENTS_URL не задан в конфигурации');
