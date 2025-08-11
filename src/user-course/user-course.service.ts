@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { UserCourse } from './entities/user-course.entity';
 import { User } from '../user/entities/user.entity';
 import { Course } from '../course/entities/course.entity';
+import { Category } from 'src/category/entities/category.entity';
 
 @Injectable()
 export class UserCourseService {
@@ -13,9 +14,11 @@ export class UserCourseService {
     @InjectRepository(User) private userRepository: Repository<User>,
     @InjectRepository(Course)
     private courseRepository: Repository<Course>,
+    @InjectRepository(Category)
+    private categoryRepository: Repository<Category>,
   ) {}
 
-  async assignCourseToUser(userId: number, courseId: number, degree: string) {
+  async assignCourseToUser(userId: number, courseId: number, categoryId: number, degree: string) {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException(`Foydalanuvchi ID ${userId} bilan topilmadi`);
@@ -26,6 +29,11 @@ export class UserCourseService {
       throw new NotFoundException(`Kurs ID ${courseId} bilan topilmadi`);
     }
 
+    const category = await this.categoryRepository.findOne({ where: { id: categoryId } });
+    if (!category) {
+      throw new NotFoundException(`Kategoriya ID ${categoryId} bilan topilmadi`);
+    }
+
     const existingUserCourse = await this.userCourseRepository.findOne({
       where: { user: { id: userId }, course: { id: courseId } },
     });
@@ -34,11 +42,12 @@ export class UserCourseService {
     }
 
     const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + (course.durationMonths || 6));
+    expiresAt.setMonth(expiresAt.getMonth() + (category.durationMonths || 6));
 
     const userCourse = this.userCourseRepository.create({
       user,
       course,
+      category,
       degree,
       expiresAt,
     });
@@ -55,7 +64,7 @@ export class UserCourseService {
   async findUserCourses(userId: number) {
     const userCourses = await this.userCourseRepository.find({
       where: { user: { id: userId } },
-      relations: ['course', 'course.categories'],
+      relations: ['course', 'course.categories', 'category'],
       order: { createdAt: 'ASC' },
     });
 
@@ -64,7 +73,7 @@ export class UserCourseService {
       course: {
         id: userCourse.course.id,
         name: userCourse.course.name,
-        durationMonths: userCourse.course.durationMonths,
+        durationMonths: userCourse.category.durationMonths,
         categories: userCourse.course.categories.map(category => ({
           id: category.id,
           name: category.name,

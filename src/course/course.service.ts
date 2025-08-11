@@ -15,12 +15,12 @@ export class CoursesService {
   ) {}
 
   async create(createCourseDto: CreateCourseDto) {
-    const { name, categoryIds, durationMonths } = createCourseDto;
+    const { name, categoryIds } = createCourseDto;
     const existingCourse = await this.coursesRepository.findOne({ where: { name } });
     if (existingCourse) {
       throw new BadRequestException(`"${name}" nomli kurs allaqachon mavjud`);
     }
-    const course = this.coursesRepository.create({ name, durationMonths });
+    const course = this.coursesRepository.create({ name });
 
     if (categoryIds && categoryIds.length > 0) {
       const categories = await this.categoryRepository.find({
@@ -36,12 +36,13 @@ export class CoursesService {
 
     return this.coursesRepository.save(course);
   }
-async findAll() {
-  return this.coursesRepository.find({
-    relations: ['categories', 'categories.levels'],
-    order: { createdAt: 'ASC' },
-  });
-}
+
+  async findAll() {
+    return this.coursesRepository.find({
+      relations: ['categories', 'categories.levels'],
+      order: { createdAt: 'ASC' },
+    });
+  }
 
   async findOne(id: number) {
     const course = await this.coursesRepository.findOne({

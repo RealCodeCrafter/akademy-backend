@@ -5,13 +5,11 @@ import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { AuthGuard } from 'src/auth/auth.guard';
 
+
 @Controller('courses')
 export class CoursesController {
   constructor(private coursesService: CoursesService) {}
 
-  
-    // @UseGuards(AuthGuard, RolesGuard)
-    // @Roles('admin')
   @Post()
   create(@Body() createCourseDto: CreateCourseDto) {
     return this.coursesService.create(createCourseDto);

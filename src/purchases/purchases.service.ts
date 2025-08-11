@@ -9,6 +9,7 @@ import { CategoryService } from '../category/category.service';
 import { UserCourseService } from '../user-course/user-course.service';
 import { LevelService } from '../level/level.service';
 
+
 @Injectable()
 export class PurchasesService {
   constructor(
@@ -54,7 +55,7 @@ export class PurchasesService {
       }
       degree = level.name;
     } else {
-      degree = category.name; // Exams kabi kategoriyalar uchun
+      degree = category.name;
     }
 
     const existingUserCourse = await this.userCourseService.findUserCourse(userId, createPurchaseDto.courseId);
@@ -118,7 +119,7 @@ export class PurchasesService {
 
     const existingUserCourse = await this.userCourseService.findUserCourse(purchase.user.id, purchase.course.id);
     if (!existingUserCourse || existingUserCourse.expiresAt <= new Date()) {
-      await this.userCourseService.assignCourseToUser(purchase.user.id, purchase.course.id, purchase.degree);
+      await this.userCourseService.assignCourseToUser(purchase.user.id, purchase.course.id, purchase.category.id, purchase.degree);
     }
 
     return {

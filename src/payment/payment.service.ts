@@ -1,3 +1,5 @@
+
+
 import { Injectable, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,9 +14,9 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as jwt from 'jsonwebtoken';
 
+
 @Injectable()
 export class PaymentsService {
-
   constructor(
     @InjectRepository(Payment)
     private paymentRepository: Repository<Payment>,
@@ -51,7 +53,6 @@ export class PaymentsService {
       return merchantId.replace(/[^0-9]/g, '');
     }
   }
-
 
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
     const user = await this.usersService.findOne(userId);
@@ -109,7 +110,6 @@ export class PaymentsService {
     }
 
     const merchantId = await this.getMerchantId();
-
     try {
       const response = await axios.post(
         `https://enter.tochka.com/uapi/acquiring/v1.0/payments`,
@@ -124,7 +124,8 @@ export class PaymentsService {
             saveCard: false,
             merchantId: merchantId,
             preAuthorization: false,
-            ttl: 10080
+            ttl: 10080,
+            sourceName: 'A+ Academy'
           },
         },
         {

@@ -4,6 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
 import { UserCourse } from './entities/user-course.entity';
 
+
 @Injectable()
 export class UserCourseCronService {
   constructor(

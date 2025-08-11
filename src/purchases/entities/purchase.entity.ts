@@ -4,6 +4,7 @@ import { Course } from '../../course/entities/course.entity';
 import { Category } from '../../category/entities/category.entity';
 import { Payment } from 'src/payment/entities/payment.entity';
 
+
 @Entity()
 export class Purchase {
   @PrimaryGeneratedColumn()

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category } from './entities/category.entity';
@@ -45,6 +45,7 @@ export class CategoryService {
     }
     return category;
   }
+
   async getLevelsByCategory(categoryId: number) {
     const category = await this.categoryRepository.findOne({
       where: { id: categoryId },
@@ -55,7 +56,6 @@ export class CategoryService {
     }
     return category.levels || [];
   }
-  
 
   async isLevelLinkedToCategory(categoryId: number, levelId: number) {
     const category = await this.categoryRepository.findOne({

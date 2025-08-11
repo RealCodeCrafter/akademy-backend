@@ -7,7 +7,4 @@ export class CreateCourseDto {
   @IsArray()
   @IsNumber({}, { each: true })
   categoryIds: number[];
-
-  @IsNumber()
-  durationMonths?: number;
 }
