@@ -10,10 +10,7 @@ export class Course {
 
   @Column({ nullable: true })
   name: string;
-
-  @Column({ type: 'int', nullable: true })
-  durationMonths: number;
-
+  
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 

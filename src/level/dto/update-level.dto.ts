@@ -1,15 +1,11 @@
 import { IsString, IsNumber, IsOptional } from 'class-validator';
 
-export class UpdateCategoryDto {
+export class UpdateLevelDto {
   @IsString()
   @IsOptional()
   name?: string;
 
   @IsNumber()
   @IsOptional()
-  price?: number;
-
-  @IsNumber()
-  @IsOptional()
-  durationMonths?: number;
+  categoryId?: number;
 }

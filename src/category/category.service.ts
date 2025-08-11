@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Category } from './entities/category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { Level } from '../level/entities/level.entity';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Injectable()
 export class CategoryService {
@@ -92,6 +93,30 @@ export class CategoryService {
 
     return category;
   }
+  async update(id: number, updateCategoryDto: UpdateCategoryDto) {
+  const category = await this.categoryRepository.findOne({ where: { id } });
+
+  if (!category) {
+    throw new NotFoundException(`Kategoriya ID ${id} bilan topilmadi`);
+  }
+
+  if (
+    updateCategoryDto.name &&
+    updateCategoryDto.name !== category.name
+  ) {
+    const existingCategory = await this.categoryRepository.findOne({
+      where: { name: updateCategoryDto.name },
+    });
+    if (existingCategory) {
+      throw new BadRequestException(
+        `"${updateCategoryDto.name}" nomli kategoriya allaqachon mavjud`
+      );
+    }
+  }
+
+  Object.assign(category, updateCategoryDto);
+  return this.categoryRepository.save(category);
+}
 
   async delete(id: number) {
     const category = await this.findOne(id);

@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, UseGuards, Patch } from '@nestjs/common';
 import { CoursesService } from './course.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { RolesGuard } from 'src/auth/roles.guard';
 import { Roles } from 'src/auth/roles.decorator';
 import { AuthGuard } from 'src/auth/auth.guard';
+import { UpdateCourseDto } from './dto/update-course.dto';
 
 
 @Controller('courses')
@@ -29,6 +30,15 @@ export class CoursesController {
   findCategories(@Param('id') id: string) {
     return this.coursesService.findCategories(+id);
   }
+
+   @Patch(':id')
+  update(
+    @Param('id') id: string,
+    @Body() updateCourseDto: UpdateCourseDto,
+  ) {
+    return this.coursesService.update(+id, updateCourseDto);
+  }
+
 
   @Delete(':id')
   delete(@Param('id') id: string) {
