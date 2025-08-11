@@ -65,46 +65,13 @@ export class PaymentsService {
 
   async getCustomerAndMerchantData(token: string) {
     const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
-    const bankCode = this.configService.get<string>('TOCHKA_BANK_CODE') || '044525104';
 
-    if (!customerCode || !bankCode) {
-      this.logger.error(`TOCHKA_CUSTOMER_CODE или TOCHKA_BANK_CODE не найдены в файле .env: customerCode=${customerCode}, bankCode=${bankCode}`);
-      throw new BadRequestException('TOCHKA_CUSTOMER_CODE или TOCHKA_BANK_CODE не найдены');
+    if (!customerCode) {
+      this.logger.error(`TOCHKA_CUSTOMER_CODE не найден в файле .env: customerCode=${customerCode}`);
+      throw new BadRequestException('TOCHKA_CUSTOMER_CODE не найден');
     }
 
     try {
-      this.logger.log(`Запрос данных клиента в Tochka API: https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`);
-      const customersResponse = await axios.get(
-        `https://enter.tochka.com/uapi/sbp/v1.0/customer/${customerCode}/${bankCode}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      ).catch(err => {
-        const status = err.response?.status || 'unknown';
-        const responseData = JSON.stringify(err.response?.data || {});
-        this.logger.error(`Ошибка API клиента: status=${status}, response=${responseData}, message=${err.message}`);
-        if (status === 403) {
-          throw new UnauthorizedException('Недостаточно прав токена: требуется разрешение ReadSBPData. Проверьте документацию: https://enter.tochka.com/doc/v2/redoc');
-        }
-        if (status === 401) {
-          throw new UnauthorizedException('Токен недействителен или истёк');
-        }
-        if (status === 404) {
-          throw new NotFoundException(`Клиент не найден: customerCode=${customerCode}, bankCode=${bankCode}`);
-        }
-        if (status === 400) {
-          throw new BadRequestException(`Неверный формат запроса: ${responseData}`);
-        }
-        throw new BadRequestException(`Ошибка API клиента: ${err.message}, status=${status}`);
-      });
-
-      this.logger.log(`Ответ клиента: ${JSON.stringify(customersResponse.data)}`);
-      const customerData = customersResponse.data.Data;
-      if (customerData.customerType !== 'Business') {
-        this.logger.error('Клиент типа Business не найден');
-        throw new NotFoundException('Клиент типа Business не найден');
-      }
-
       this.logger.log(`Запрос данных ритейлеров в Tochka API: https://enter.tochka.com/uapi/acquiring/v1.0/retailers?customerCode=${customerCode}`);
       const retailersResponse = await axios.get(
         `https://enter.tochka.com/uapi/acquiring/v1.0/retailers?customerCode=${customerCode}`,
@@ -119,7 +86,7 @@ export class PaymentsService {
         const responseData = JSON.stringify(err.response?.data || {});
         this.logger.error(`Ошибка API ритейлеров: status=${status}, response=${responseData}, message=${err.message}`);
         if (status === 403) {
-          throw new UnauthorizedException('Недостаточно прав токена: требуется разрешение ReadSBPData. Проверьте документацию: https://enter.tochka.com/doc/v2/redoc');
+          throw new UnauthorizedException('Недостаточно прав токена: требуется разрешение ReadAcquiringData. Проверьте документацию: https://enter.tochka.com/doc/v2/redoc');
         }
         if (status === 400) {
           throw new BadRequestException(`Неверный формат запроса: ${responseData}`);
@@ -136,7 +103,7 @@ export class PaymentsService {
         throw new NotFoundException('Активный merchantId не найден');
       }
 
-      return { customerCode: customerData.customerCode, merchantId: merchant.merchantId };
+      return { customerCode, merchantId: merchant.merchantId };
     } catch (err) {
       this.logger.error(`Ошибка API Tochka: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
       throw new BadRequestException(`Ошибка API Tochka: ${err.message}`);
@@ -209,12 +176,11 @@ export class PaymentsService {
     }
 
     const { customerCode, merchantId } = await this.getCustomerAndMerchantData(token);
-    const paymentMethods = this.configService.get<string>('TOCHKA_PAYMENT_METHODS')?.split(',') || ['CARD', 'SBP'];
 
     try {
-      this.logger.log(`Отправка запроса на endpoint payment-links в Tochka API: https://enter.tochka.com/uapi/sbp/v1.0/payment-links`);
+      this.logger.log(`Отправка запроса на endpoint payment-links в Tochka API: https://enter.tochka.com/uapi/acquiring/v1.0/payment-links`);
       const paymentResponse = await axios.post(
-        'https://enter.tochka.com/uapi/sbp/v1.0/payment-links',
+        'https://enter.tochka.com/uapi/acquiring/v1.0/payment-links',
         {
           amount: category.price,
           currency: 'RUB',
@@ -224,7 +190,7 @@ export class PaymentsService {
           successUrl: 'https://aplusacademy.ru/success',
           failUrl: 'https://aplusacademy.ru/fail',
           orderId: transactionId,
-          paymentMethods,
+          // paymentMethods удалено, чтобы избежать ошибки с параметрами
         },
         {
           headers: {
