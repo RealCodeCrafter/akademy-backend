@@ -16,9 +16,8 @@ import axiosRetry from 'axios-retry';
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  private readonly baseUrl = 'https://enter.tochka.com/uapi'; // Базовый URL API
-  private readonly apiVersion = 'v1.0'; // Версия API
-  private readonly consentsUrl = `${this.baseUrl}/consent/${this.apiVersion}/consents`; // URL для consents
+  private readonly baseUrl = 'https://enter.tochka.com/uapi';
+  private readonly apiVersion = 'v1.0';
 
   constructor(
     @InjectRepository(Payment)
@@ -33,53 +32,10 @@ export class PaymentsService {
     axiosRetry(axios, { retries: 3, retryDelay: axiosRetry.exponentialDelay });
   }
 
-  // Получение consents для проверки разрешений
-  private async fetchConsents(token: string) {
-    try {
-      const res = await axios.get(this.consentsUrl, {
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: 10000,
-      });
-      return res.data?.Data?.Consent || [];
-    } catch (err) {
-      this.logger.error(`Ошибка получения consents: ${err?.message || err}`);
-      return [];
-    }
-  }
-
-  // Поиск подходящего consent по clientId
-  private findBestConsent(consents: any[], clientId: string) {
-    if (!consents || consents.length === 0) return null;
-    const found = consents.find(c => c.clientId === clientId);
-    return found || consents[0];
-  }
-
-  // Проверка разрешений для SBP (используем только JWT и clientId)
-  private async ensureSbpPermission(token: string, clientId: string, desiredPermissions: string[] = ['EditSBPData', 'ReadSBPData']) {
-    const consents = await this.fetchConsents(token);
-    if (!consents || consents.length === 0) {
-      throw new BadRequestException('Consents не найдены для токена. Обратитесь к администратору сайта.');
-    }
-
-    const consent = this.findBestConsent(consents, clientId);
-    if (!consent) {
-      throw new BadRequestException('Подходящий consent не найден для clientId. Проверьте настройки.');
-    }
-
-    const permissions: string[] = consent.permissions || [];
-    const missing = desiredPermissions.filter(p => !permissions.includes(p));
-    if (missing.length > 0) {
-      throw new BadRequestException(`Отсутствуют разрешения: ${missing.join(', ')}. Обратитесь к администратору.`);
-    }
-
-    return consent;
-  }
-
-  // Инициация платежа: создаем динамический QR-код, возвращаем ссылку для фронта
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
     this.logger.log(`Старт платежа: userId=${userId}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`);
 
-    // Валидация сущностей
+    // --- Курс, категория, уровень текширишлари (o'zgartirmadim) ---
     const user = await this.usersService.findOne(userId);
     if (!user) throw new NotFoundException('Пользователь не найден');
 
@@ -102,8 +58,9 @@ export class PaymentsService {
     } else {
       degree = category.name;
     }
+    // --- Tekshiruvlar tugadi ---
 
-    // Создание покупки и платежа
+    // --- Purchase va Payment yaratish ---
     const purchase = await this.purchasesService.create(createPaymentDto, userId);
     this.logger.log(`Покупка создана: purchaseId=${purchase.id}`);
 
@@ -119,30 +76,26 @@ export class PaymentsService {
     const savedPayment = await this.paymentRepository.save(payment);
     this.logger.log(`Платеж создан: paymentId=${savedPayment.id}, transactionId=${transactionId}`);
 
-    // Конфигурация (только JWT и clientId, merchantId/accountId из consent или env, но предполагаем в env)
+    // --- Bank API ga so‘rov uchun env dan parametrlar ---
     const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
     const clientId = this.configService.get<string>('TOCHKA_CLIENT_ID');
-    const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID'); // Должен быть в env после регистрации
-    const accountId = this.configService.get<string>('TOCHKA_ACCOUNT_ID'); // Должен быть в env
+    const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID');
+    const accountId = this.configService.get<string>('TOCHKA_ACCOUNT_ID');
     const redirectUrl = this.configService.get<string>('TOCHKA_REDIRECT_URL') || 'https://a-plus-academy.com/success';
 
     if (!token || !clientId) throw new InternalServerErrorException('JWT токен или clientId не найдены');
     if (!merchantId || !accountId) throw new InternalServerErrorException('merchantId или accountId не настроены');
 
-    // Проверка разрешений
-    await this.ensureSbpPermission(token, clientId);
-
-    // Запрос на создание динамического QR-кода
-    const amount = category.price;
+    // --- Формируем тело запроса на создание платежной ссылки ---
     const body = {
       Data: {
-        amount,
+        amount: category.price,
         currency: 'RUB',
         paymentPurpose: `Оплата курса: ${course.name}, категория: ${category.name}, уровень: ${degree}`,
-        qrcType: '02', // Динамический QR для одноразового платежа
+        qrcType: '02',
         imageParams: { width: 300, height: 300 },
         sourceName: 'A+ Academy',
-        ttl: 4320, // 72 часа
+        ttl: 4320,
         redirectUrl,
       },
     };
@@ -155,7 +108,7 @@ export class PaymentsService {
         timeout: 15000,
       });
 
-      if (response.status !== 200 && response.status !== 201) {
+      if (![200, 201].includes(response.status)) {
         throw new BadRequestException(`Ошибка банка: ${JSON.stringify(response.data)}`);
       }
 
@@ -164,13 +117,11 @@ export class PaymentsService {
 
       if (!paymentUrl || !qrcId) throw new BadRequestException('Ссылка или qrcId не получены');
 
-      // Обновляем transactionId на qrcId
       savedPayment.transactionId = qrcId;
       await this.paymentRepository.save(savedPayment);
 
-      // Возвращаем ссылку фронту для редиректа
       return {
-        paymentUrl,
+        paymentUrl,       // Frontend shu linkga yo'naltiradi
         paymentId: savedPayment.id,
         purchaseId: purchase.id,
         transactionId: qrcId,
@@ -181,7 +132,18 @@ export class PaymentsService {
     }
   }
 
-  // Обработка webhook: проверяем сумму, если не совпадает - failed (чтобы убрать фейковые)
+  // To‘lov holatini tekshirish uchun alohida funksiya
+  async getPaymentStatus(paymentId: number) {
+    const payment = await this.paymentRepository.findOne({ where: { id: paymentId } });
+    if (!payment) throw new NotFoundException('Платеж не найден');
+    return {
+      status: payment.status,
+      transactionId: payment.transactionId,
+      amount: payment.amount,
+    };
+  }
+
+  // Webhook uchun callback handler (bankdan keladigan statusni qabul qiladi)
   async handleCallback(callbackData: string) {
     this.logger.log('Webhook получен');
 
@@ -207,7 +169,6 @@ export class PaymentsService {
     const payment = await this.paymentRepository.findOne({ where: { transactionId: qrcId } });
     if (!payment) throw new NotFoundException('Платеж не найден');
 
-    // Проверка суммы: если не совпадает - фейковый, пометить failed
     if (bankAmount !== payment.amount) {
       payment.status = 'failed';
       await this.paymentRepository.save(payment);
@@ -215,7 +176,6 @@ export class PaymentsService {
       return { status: 'OK' };
     }
 
-    // Обработка статуса (только один реальный платеж)
     if (bankStatus === 'Accepted') {
       payment.status = 'completed';
       await this.paymentRepository.save(payment);

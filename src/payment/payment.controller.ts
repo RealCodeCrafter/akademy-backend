@@ -23,7 +23,6 @@ export class PaymentsController {
 
   constructor(private readonly paymentsService: PaymentsService) {}
 
-  // Старт платежа: возвращаем ссылку для фронта
   @UseGuards(AuthGuard)
   @Post('start')
   async startPayment(
@@ -41,7 +40,6 @@ export class PaymentsController {
     }
   }
 
-  // Webhook от банка
   @Post('callback')
   async handleCallback(@Body() body: any) {
     const callbackData = typeof body === 'string' ? body : body?.callbackData;
