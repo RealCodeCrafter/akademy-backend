@@ -100,25 +100,30 @@ export class PaymentsService {
     }
 
     try {
-      this.logger.log(`Отправка запроса в Tochka API: https://enter.tochka.com/api/sbp/v1.0/payments`);
-      const paymentResponse = await axios.post(
-        'https://enter.tochka.com/api/sbp/v1.0/payments',
-        {
-          amount: category.price,
-          currency: 'RUB',
-          customerCode,
-          clientId,
-          description: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
-          orderId: transactionId,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            CustomerCode: customerCode,
-          },
-        },
-      );
+      const tochkaApiUrl = this.configService.get<string>('TOCHKA_PAYMENTS_URL');
+      if (!tochkaApiUrl) {
+  this.logger.error('TOCHKA_PAYMENTS_URL .env faylida topilmadi');
+  throw new BadRequestException('TOCHKA_PAYMENTS_URL не задан в конфигурации');
+}
+this.logger.log(`Отправка запроса в Tochka API: ${tochkaApiUrl}`);
+const paymentResponse = await axios.post(
+  tochkaApiUrl,
+  {
+    amount: category.price,
+    currency: 'RUB',
+    customerCode,
+    clientId,
+    description: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
+    orderId: transactionId,
+  },
+  {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      CustomerCode: customerCode,
+    },
+  },
+);
 
       const paymentUrl = paymentResponse.data.Data?.paymentLink || paymentResponse.data.Data?.qrUrl || paymentResponse.data.paymentLink;
       this.logger.log(`Ссылка на оплату получена: paymentId=${savedPayment.id}, paymentUrl=${paymentUrl}`);
