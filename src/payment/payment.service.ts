@@ -46,7 +46,7 @@ export class PaymentsService {
           grant_type: 'client_credentials',
           client_id: clientId,
           client_secret: clientSecret,
-          scope: 'ReadAccountsBasic ReadAccountsDetail MakeAcquiringOperation ReadAcquiringData ReadBalances ReadStatements ReadCustomerData ReadSBPData EditSBPData CreatePaymentForSign CreatePaymentOrder ManageWebhookData ManageInvoiceData',
+          scope: 'ReadSBPData EditSBPData ReadCustomerData ManageWebhookData',
         }),
         {
           headers: {
@@ -60,53 +60,6 @@ export class PaymentsService {
     } catch (err) {
       this.logger.error(`Ошибка получения токена: ${err.message}`);
       throw new BadRequestException(`Ошибка получения токена: ${err.message}`);
-    }
-  }
-
-  async getCustomerAndMerchantData(token: string) {
-    const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
-
-    if (!customerCode) {
-      this.logger.error(`TOCHKA_CUSTOMER_CODE не найден в файле .env: customerCode=${customerCode}`);
-      throw new BadRequestException('TOCHKA_CUSTOMER_CODE не найден');
-    }
-
-    try {
-      this.logger.log(`Запрос данных ритейлеров в Tochka API: https://enter.tochka.com/uapi/acquiring/v1.0/retailers?customerCode=${customerCode}`);
-      const retailersResponse = await axios.get(
-        `https://enter.tochka.com/uapi/acquiring/v1.0/retailers?customerCode=${customerCode}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        },
-      ).catch(err => {
-        const status = err.response?.status || 'unknown';
-        const responseData = JSON.stringify(err.response?.data || {});
-        this.logger.error(`Ошибка API ритейлеров: status=${status}, response=${responseData}, message=${err.message}`);
-        if (status === 403) {
-          throw new UnauthorizedException('Недостаточно прав токена: требуется разрешение ReadAcquiringData. Проверьте документацию: https://enter.tochka.com/doc/v2/redoc');
-        }
-        if (status === 400) {
-          throw new BadRequestException(`Неверный формат запроса: ${responseData}`);
-        }
-        throw new BadRequestException(`Ошибка API ритейлеров: ${err.message}, status=${status}`);
-      });
-
-      this.logger.log(`Ответ ритейлеров: ${JSON.stringify(retailersResponse.data)}`);
-      const merchant = retailersResponse.data.Data?.Merchants?.find(
-        (r: any) => r.status === 'REG' && r.isActive,
-      );
-      if (!merchant?.merchantId) {
-        this.logger.error('Активный merchantId не найден');
-        throw new NotFoundException('Активный merchantId не найден');
-      }
-
-      return { customerCode, merchantId: merchant.merchantId };
-    } catch (err) {
-      this.logger.error(`Ошибка API Tochka: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
-      throw new BadRequestException(`Ошибка API Tochka: ${err.message}`);
     }
   }
 
@@ -175,53 +128,67 @@ export class PaymentsService {
       token = await this.getAccessToken(); // Получаем новый токен, если не найден в .env
     }
 
-    const { customerCode, merchantId } = await this.getCustomerAndMerchantData(token);
+    const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID');
+    const accountId = this.configService.get<string>('TOCHKA_ACCOUNT_ID');
+
+    if (!merchantId || !accountId) {
+      this.logger.error('TOCHKA_MERCHANT_ID или TOCHKA_ACCOUNT_ID не найдены в .env');
+      throw new BadRequestException('TOCHKA_MERCHANT_ID или TOCHKA_ACCOUNT_ID не найдены');
+    }
 
     try {
-      this.logger.log(`Отправка запроса на endpoint payment-links в Tochka API: https://enter.tochka.com/uapi/acquiring/v1.0/payment-links`);
-      const paymentResponse = await axios.post(
-        'https://enter.tochka.com/uapi/acquiring/v1.0/payment-links',
+      this.logger.log(`Отправка запроса на регистрацию QR-кода в Tochka API: https://enter.tochka.com/uapi/sbp/v1.0/qr-code/merchant/${merchantId}/${accountId}`);
+      const qrResponse = await axios.post(
+        `https://enter.tochka.com/uapi/sbp/v1.0/qr-code/merchant/${merchantId}/${accountId}`,
         {
-          amount: category.price,
-          currency: 'RUB',
-          customerCode,
-          merchantId,
-          description: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
-          successUrl: 'https://aplusacademy.ru/success',
-          failUrl: 'https://aplusacademy.ru/fail',
-          orderId: transactionId,
-          // paymentMethods удалено, чтобы избежать ошибки с параметрами
+          Data: {
+            amount: category.price,
+            currency: 'RUB',
+            paymentPurpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
+            qrcType: '02', // Динамический QR-код
+            imageParams: {},
+            sourceName: 'APlus Academy',
+            ttl: 30, // 30 минут
+            redirectUrl: 'https://aplusacademy.ru/success',
+          },
         },
         {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
-            CustomerCode: customerCode,
           },
         },
       ).catch(err => {
         const status = err.response?.status || 'unknown';
         const responseData = JSON.stringify(err.response?.data || {});
-        this.logger.error(`Ошибка создания платёжной ссылки: status=${status}, response=${responseData}, message=${err.message}`);
+        this.logger.error(`Ошибка создания QR-кода: status=${status}, response=${responseData}, message=${err.message}`);
         if (status === 403) {
-          throw new UnauthorizedException('Недостаточно прав токена: требуется разрешение MakeAcquiringOperation. Проверьте документацию: https://enter.tochka.com/doc/v2/redoc');
+          throw new UnauthorizedException('Недостаточно прав токена: требуется разрешение EditSBPData. Проверьте документацию: https://enter.tochka.com/doc/v2/redoc');
         }
         if (status === 400) {
           throw new BadRequestException(`Неверный формат запроса: ${responseData}`);
         }
-        throw new BadRequestException(`Ошибка создания платёжной ссылки: ${err.message}, status=${status}`);
+        throw new BadRequestException(`Ошибка создания QR-кода: ${err.message}, status=${status}`);
       });
 
-      this.logger.log(`Платёжная ссылка создана: paymentId=${savedPayment.id}, paymentUrl=${paymentResponse.data.Data.paymentLink}`);
+      const qrData = qrResponse.data.Data;
+      const paymentUrl = qrData.payload;
+      const qrcId = qrData.qrcId;
+
+      // Обновляем payment с qrcId как transactionId для отслеживания
+      savedPayment.transactionId = qrcId;
+      await this.paymentRepository.save(savedPayment);
+
+      this.logger.log(`QR-код для платежа создан: paymentId=${savedPayment.id}, paymentUrl=${paymentUrl}, qrcId=${qrcId}`);
       return {
-        paymentUrl: paymentResponse.data.Data.paymentLink,
+        paymentUrl,
         paymentId: savedPayment.id,
         purchaseId: purchase.id,
-        transactionId,
+        transactionId: qrcId,
       };
     } catch (err) {
-      this.logger.error(`Ошибка создания платёжной ссылки: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
-      throw new BadRequestException(`Ошибка создания платёжной ссылки: ${err.message}`);
+      this.logger.error(`Ошибка создания QR-кода: ${err.message}, status: ${err.response?.status || 'unknown'}, response: ${JSON.stringify(err.response?.data || {})}`);
+      throw new BadRequestException(`Ошибка создания QR-кода: ${err.message}`);
     }
   }
 
@@ -251,13 +218,14 @@ export class PaymentsService {
     const { event, data } = decoded;
     this.logger.log(`Событие вебхука: ${event}, данные: ${JSON.stringify(data)}`);
 
-    if (event === 'acquiringInternetPayment') {
+    // Для SBP QR-кода событие может быть 'qrCodePayment' или подобным; адаптируем под 'acquiringInternetPayment' или новое
+    if (event === 'qrCodePayment' || event === 'acquiringInternetPayment') { // Предполагаем возможные события
       const payment = await this.paymentRepository.findOne({
-        where: { transactionId: data.operationId },
+        where: { transactionId: data.qrcId || data.operationId },
         relations: ['purchase', 'purchase.user', 'purchase.course', 'purchase.category'],
       });
       if (!payment) {
-        this.logger.error(`Платёж не найден: operationId=${data.operationId}`);
+        this.logger.error(`Платёж не найден: qrcId/operationId=${data.qrcId || data.operationId}`);
         throw new NotFoundException('Платёж не найден');
       }
 
@@ -268,7 +236,7 @@ export class PaymentsService {
         throw new NotFoundException(`Покупка не найдена: purchaseId=${payment.purchaseId}`);
       }
 
-      if (data.status === 'Accepted') {
+      if (data.status === 'Accepted' || data.status === 'Completed') { // Адаптируем под возможные статусы SBP
         payment.status = 'completed';
         await this.paymentRepository.save(payment);
         await this.purchasesService.confirmPurchase(payment.purchaseId);
