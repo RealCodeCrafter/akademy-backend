@@ -51,6 +51,7 @@ export class DocumentsController {
     return this.documentsService.findUserDocuments(+userId);
   }
 
+  
   @Get()
   findAllDocuments() {
     return this.documentsService.findAll();
