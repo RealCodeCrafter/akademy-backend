@@ -76,46 +76,53 @@ export class UsersService {
   }
 
   async findOne(id: number) {
-    this.validateId(id);
-    const user = await this.usersRepository.findOne({
-      where: { id },
-      select: ['id', 'username', 'email', 'role', 'parentName', 'parentPhone', 'parentSurname', 'parentPatronymic', 'parentAddress', 'studentName', 'studentSurname', 'studentPatronymic', 'studentAddress', 'studentBirthDate', 'createdAt'],
-      relations: ['purchases', 'requests', 'userCourses', 'documents'],
-    });
-    if (!user) throw new NotFoundException(`Foydalanuvchi ID ${id} bilan topilmadi`);
-    return { ...user, password: this.decryptPassword(user.password) };
-  }
+  this.validateId(id);
+
+  const user = await this.usersRepository
+    .createQueryBuilder('user')
+    .leftJoinAndSelect('user.purchases', 'purchases')
+    .leftJoinAndSelect('user.requests', 'requests')
+    .leftJoinAndSelect('user.userCourses', 'userCourses')
+    .leftJoin('user.documents', 'documents')
+    .addSelect(['documents.id', 'documents.fileName']) // faqat kerakli ustunlar
+    .where('user.id = :id', { id })
+    .getOne();
+
+  if (!user) throw new NotFoundException(`Foydalanuvchi ID ${id} bilan topilmadi`);
+
+  return { ...user, password: this.decryptPassword(user.password) };
+}
 
   async findAll(page: number = 1, limit: number = 10) {
-    const skip = (page - 1) * limit;
-    const [users, total] = await this.usersRepository.findAndCount({
-      where: { role: 'user' },
-      select: ['id', 'username', 'email', 'role', 'parentName', 'parentPhone', 'parentSurname', 'parentPatronymic', 'parentAddress', 'studentName', 'studentSurname', 'studentPatronymic', 'studentAddress', 'studentBirthDate', 'createdAt'],
-      relations: {
-        purchases: true,
-        requests: true,
-        userCourses: true,
-        documents: true,
-      },
-      order: { createdAt: 'ASC' },
-      skip,
-      take: limit,
-    });
-    return {
-      data: users.map(user => ({
-        ...user,
-        password: this.decryptPassword(user.password),
-        documents: user.documents.map(doc => ({
-          id: doc.id,
-          fileName: doc.fileName,
-          // fileData ni qaytarmaymiz
-        })),
-      })),
-      total,
-      page,
-      limit,
-    };
-  }
+  const skip = (page - 1) * limit;
+
+  const [users, total] = await this.usersRepository
+    .createQueryBuilder('user')
+    .leftJoinAndSelect('user.purchases', 'purchases')
+    .leftJoinAndSelect('user.requests', 'requests')
+    .leftJoinAndSelect('user.userCourses', 'userCourses')
+    .leftJoin('user.documents', 'documents')
+    .addSelect(['documents.id', 'documents.fileName'])  // faqat kerakli document ustunlarini qo'shamiz
+    .where('user.role = :role', { role: 'user' })
+    .orderBy('user.createdAt', 'ASC')
+    .skip(skip)
+    .take(limit)
+    .getManyAndCount();
+
+  // password ni decrypt qilish va documents ni filtrlash
+  const data = users.map(user => ({
+    ...user,
+    password: this.decryptPassword(user.password),
+    documents: user.documents.map(doc => ({
+      id: doc.id,
+      fileName: doc.fileName,
+      // fileData ni olib kelmayapmiz
+    })),
+  }));
+
+  return { data, total, page, limit };
+}
+
 
   async findByUsername(username: string) {
     if (!username) throw new BadRequestException("Username bo'sh bo'lmasligi kerak");
