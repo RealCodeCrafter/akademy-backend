@@ -1,9 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserDocument } from './entities/user-document.entity';
 import { UsersService } from '../user/user.service';
-import { Response } from 'express';
 
 @Injectable()
 export class DocumentsService {
@@ -18,7 +17,6 @@ export class DocumentsService {
     if (!user) {
       throw new NotFoundException(`Foydalanuvchi ID ${userId} topilmadi`);
     }
-
     const document = this.documentRepository.create({
       fileName: file.originalname,
       fileData: file.buffer,

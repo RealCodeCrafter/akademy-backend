@@ -64,10 +64,12 @@ export class DocumentsController {
     try {
       const { buffer, fileName, mimeType } = await this.documentsService.getFileBuffer(+docId);
       const encodedFileName = encodeURIComponent(fileName);
+
       res.set({
         'Content-Type': `${mimeType}; charset=utf-8`,
         'Content-Disposition': `attachment; filename*=UTF-8''${encodedFileName}`,
       });
+
       res.send(buffer);
     } catch (err) {
       if (err.status === 404) {
