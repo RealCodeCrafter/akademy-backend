@@ -9,6 +9,7 @@ import {
   BadRequestException,
   NotFoundException,
   Res,
+  Header,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentsService } from './user-document.service';
@@ -47,11 +48,13 @@ export class DocumentsController {
   }
 
   @Get(':userId/documents')
+  @Header('Content-Type', 'application/json; charset=utf-8')
   findUserDocuments(@Param('userId') userId: string) {
     return this.documentsService.findUserDocuments(+userId);
   }
 
   @Get()
+  @Header('Content-Type', 'application/json; charset=utf-8')
   findAllDocuments() {
     return this.documentsService.findAll();
   }
