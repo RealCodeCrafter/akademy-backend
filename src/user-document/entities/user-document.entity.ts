@@ -6,10 +6,10 @@ export class UserDocument {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ charset: 'utf8mb4' })
   fileName: string;
 
-  @Column({ type: 'bytea' , nullable: true}) 
+  @Column({ type: 'bytea', nullable: true })
   fileData: Buffer;
 
   @ManyToOne(() => User, (user) => user.documents, { onDelete: 'CASCADE' })

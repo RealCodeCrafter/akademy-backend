@@ -51,7 +51,6 @@ export class DocumentsController {
     return this.documentsService.findUserDocuments(+userId);
   }
 
-  
   @Get()
   findAllDocuments() {
     return this.documentsService.findAll();
@@ -61,9 +60,10 @@ export class DocumentsController {
   async getFile(@Param('docId') docId: string, @Res() res: Response) {
     try {
       const { buffer, fileName, mimeType } = await this.documentsService.getFileBuffer(+docId);
+      const encodedFileName = encodeURIComponent(fileName);
       res.set({
-        'Content-Type': mimeType,
-        'Content-Disposition': `attachment; filename="${fileName}"`,
+        'Content-Type': `${mimeType}; charset=utf-8`,
+        'Content-Disposition': `attachment; filename*=UTF-8''${encodedFileName}`,
       });
       res.send(buffer);
     } catch (err) {

@@ -76,9 +76,8 @@ export class DocumentsService {
       throw new NotFoundException(`Hujjat ID ${docId} topilmadi`);
     }
 
-    // MIME turini original fayl nomidan olish uchun:
     const extension = document.fileName.split('.').pop()?.toLowerCase();
-    let mimeType = 'application/octet-stream'; // default
+    let mimeType = 'application/octet-stream';
 
     if (extension) {
       if (['pdf'].includes(extension)) mimeType = 'application/pdf';
