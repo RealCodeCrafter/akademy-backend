@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, ParseIntPipe, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, ParseIntPipe, Query, BadRequestException } from '@nestjs/common';
 import { UsersService } from './user.service';
 import { CreateUserDto } from '../auth/dto/create-user.dto';
 import { AuthGuard } from '../auth/auth.guard';
@@ -18,8 +18,9 @@ export class UsersController {
   }
 
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query('page', ParseIntPipe) page: number = 1, @Query('limit', ParseIntPipe) limit: number = 10) {
+    if (page < 1 || limit < 1) throw new BadRequestException('Sahifa va limit musbat bo‘lishi kerak');
+    return this.usersService.findAll(page, limit);
   }
 
   @Post('from-request/:requestId')
@@ -42,7 +43,7 @@ export class UsersController {
 
   @Get(':id/documents')
   findUserDocuments(@Param('id', ParseIntPipe) id: number) {
-    return this.usersService.findOne(id).then(user => user.documents);
+    return this.usersService.findOne(id).then(user => user.documents.map(doc => ({ id: doc.id, fileName: doc.fileName })));
   }
 
   @Put(':id')

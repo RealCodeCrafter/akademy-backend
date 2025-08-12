@@ -21,7 +21,7 @@ export class UsersService {
 
   private validateId(id: number) {
     if (isNaN(id) || id <= 0) {
-      throw new BadRequestException('ID raqam bo\'lishi va musbat bo\'lishi kerak');
+      throw new BadRequestException("ID raqam bo'lishi va musbat bo'lishi kerak");
     }
   }
 
@@ -79,15 +79,46 @@ export class UsersService {
     this.validateId(id);
     const user = await this.usersRepository.findOne({
       where: { id },
+      select: ['id', 'username', 'email', 'role', 'parentName', 'parentPhone', 'parentSurname', 'parentPatronymic', 'parentAddress', 'studentName', 'studentSurname', 'studentPatronymic', 'studentAddress', 'studentBirthDate', 'createdAt'],
       relations: ['purchases', 'requests', 'userCourses', 'documents'],
-      order: { createdAt: 'ASC' },
     });
     if (!user) throw new NotFoundException(`Foydalanuvchi ID ${id} bilan topilmadi`);
     return { ...user, password: this.decryptPassword(user.password) };
   }
 
+  async findAll(page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+    const [users, total] = await this.usersRepository.findAndCount({
+      where: { role: 'user' },
+      select: ['id', 'username', 'email', 'role', 'parentName', 'parentPhone', 'parentSurname', 'parentPatronymic', 'parentAddress', 'studentName', 'studentSurname', 'studentPatronymic', 'studentAddress', 'studentBirthDate', 'createdAt'],
+      relations: {
+        purchases: true,
+        requests: true,
+        userCourses: true,
+        documents: true,
+      },
+      order: { createdAt: 'ASC' },
+      skip,
+      take: limit,
+    });
+    return {
+      data: users.map(user => ({
+        ...user,
+        password: this.decryptPassword(user.password),
+        documents: user.documents.map(doc => ({
+          id: doc.id,
+          fileName: doc.fileName,
+          // fileData ni qaytarmaymiz
+        })),
+      })),
+      total,
+      page,
+      limit,
+    };
+  }
+
   async findByUsername(username: string) {
-    if (!username) throw new BadRequestException('Username bo\'sh bo\'lmasligi kerak');
+    if (!username) throw new BadRequestException("Username bo'sh bo'lmasligi kerak");
     return this.usersRepository.findOne({ where: { username } });
   }
 
@@ -99,17 +130,9 @@ export class UsersService {
     return this.findOne(id);
   }
 
-  async findAll() {
-    return this.usersRepository.find({
-      where: { role: 'user' },
-      relations: ['purchases', 'requests', 'userCourses', 'documents'],
-      order: { createdAt: 'ASC' },
-    });
-  }
-
   async delete(id: number) {
     this.validateId(id);
-    const user = await this.findOne(id);
+    await this.findOne(id); // Foydalanuvchi mavjudligini tekshirish
     await this.usersRepository.delete(id);
     return { message: `Foydalanuvchi ID ${id} o'chirildi` };
   }
