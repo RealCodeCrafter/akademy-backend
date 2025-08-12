@@ -19,6 +19,12 @@ export class UsersService {
     private requestsService: RequestsService,
   ) {}
 
+  private validateId(id: number) {
+    if (isNaN(id) || id <= 0) {
+      throw new BadRequestException('ID raqam bo\'lishi va musbat bo\'lishi kerak');
+    }
+  }
+
   public encryptPassword(password: string): string {
     const cipher = crypto.createCipheriv(this.algorithm, this.key, this.iv);
     let encrypted = cipher.update(password, 'utf8', 'hex');
@@ -42,8 +48,10 @@ export class UsersService {
   }
 
   async createFromRequest(requestId: number, createUserDto: CreateUserDto) {
+    this.validateId(requestId);
     const request = await this.requestsService.findOne(requestId);
-    if (request.status !== 'accepted') throw new NotFoundException('Faqat qabul qilingan zayavkadan foydalanuvchi yaratish mumkin');
+    if (!request) throw new NotFoundException(`Zayavka ID ${requestId} bilan topilmadi`);
+    if (request.status !== 'accepted') throw new BadRequestException('Faqat qabul qilingan zayavkadan foydalanuvchi yaratish mumkin');
     const existingUser = await this.usersRepository.findOne({ where: { username: createUserDto.username } });
     if (existingUser) throw new BadRequestException('Bu username bilan foydalanuvchi allaqachon mavjud');
     const encryptedPassword = this.encryptPassword(createUserDto.password);
@@ -68,6 +76,7 @@ export class UsersService {
   }
 
   async findOne(id: number) {
+    this.validateId(id);
     const user = await this.usersRepository.findOne({
       where: { id },
       relations: ['purchases', 'requests', 'userCourses', 'documents'],
@@ -78,10 +87,12 @@ export class UsersService {
   }
 
   async findByUsername(username: string) {
+    if (!username) throw new BadRequestException('Username bo\'sh bo\'lmasligi kerak');
     return this.usersRepository.findOne({ where: { username } });
   }
 
   async update(id: number, updateUserDto: UpdateUserDto) {
+    this.validateId(id);
     const user = await this.findOne(id);
     if (updateUserDto.password) updateUserDto.password = this.encryptPassword(updateUserDto.password);
     await this.usersRepository.update(id, updateUserDto);
@@ -97,12 +108,14 @@ export class UsersService {
   }
 
   async delete(id: number) {
+    this.validateId(id);
     const user = await this.findOne(id);
     await this.usersRepository.delete(id);
     return { message: `Foydalanuvchi ID ${id} o'chirildi` };
   }
 
   async findByUsernameOrEmail(username: string, email: string) {
+    if (!username && !email) throw new BadRequestException('Username yoki email kiritilishi kerak');
     return this.usersRepository.findOne({ where: [{ username }, { email }] });
   }
 }
