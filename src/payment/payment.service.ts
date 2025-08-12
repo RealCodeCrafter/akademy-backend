@@ -28,31 +28,6 @@ export class PaymentsService {
     private configService: ConfigService,
   ) {}
 
-  async getMerchantId(): Promise<string> {
-    const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
-    const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE') || '305149818';
-
-    try {
-      const response = await axios.get(
-        `https://enter.tochka.com/uapi/acquiring/v1.0/retailers?customerCode=${customerCode}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const retailers = response.data.Data.Retailer;
-      if (!retailers || retailers.length === 0) {
-        throw new BadRequestException('No retailers found');
-      }
-
-      return retailers[1].merchantId;
-    } catch (err) {
-      const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID') || 'MB0001852606';
-      return merchantId.replace(/[^0-9]/g, '');
-    }
-  }
 
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
     const user = await this.usersService.findOne(userId);
@@ -109,7 +84,7 @@ export class PaymentsService {
       throw new BadRequestException('TOCHKA_JWT_TOKEN не найден в конфигурации');
     }
 
-    const merchantId = await this.getMerchantId();
+    const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID')
     try {
       const response = await axios.post(
         `https://enter.tochka.com/uapi/acquiring/v1.0/payments`,
