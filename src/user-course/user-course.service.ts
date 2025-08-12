@@ -1,13 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserCourse } from './entities/user-course.entity';
 import { User } from '../user/entities/user.entity';
 import { Course } from '../course/entities/course.entity';
-import { Category } from 'src/category/entities/category.entity';
+import { Category } from '../category/entities/category.entity';
 
 @Injectable()
 export class UserCourseService {
+  private readonly logger = new Logger(UserCourseService.name);
+
   constructor(
     @InjectRepository(UserCourse)
     private userCourseRepository: Repository<UserCourse>,
@@ -19,18 +21,22 @@ export class UserCourseService {
   ) {}
 
   async assignCourseToUser(userId: number, courseId: number, categoryId: number, degree: string) {
+    this.logger.log(`Assigning course to user: userId=${userId}, courseId=${courseId}, categoryId=${categoryId}, degree=${degree}`);
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
+      this.logger.error(`User ID ${userId} not found`);
       throw new NotFoundException(`Foydalanuvchi ID ${userId} bilan topilmadi`);
     }
 
     const course = await this.courseRepository.findOne({ where: { id: courseId } });
     if (!course) {
+      this.logger.error(`Course ID ${courseId} not found`);
       throw new NotFoundException(`Kurs ID ${courseId} bilan topilmadi`);
     }
 
     const category = await this.categoryRepository.findOne({ where: { id: categoryId } });
     if (!category) {
+      this.logger.error(`Category ID ${categoryId} not found`);
       throw new NotFoundException(`Kategoriya ID ${categoryId} bilan topilmadi`);
     }
 
@@ -38,6 +44,7 @@ export class UserCourseService {
       where: { user: { id: userId }, course: { id: courseId } },
     });
     if (existingUserCourse && existingUserCourse.expiresAt > new Date()) {
+      this.logger.warn(`Course already assigned and active: userId=${userId}, courseId=${courseId}`);
       return existingUserCourse;
     }
 
@@ -52,7 +59,9 @@ export class UserCourseService {
       expiresAt,
     });
 
-    return this.userCourseRepository.save(userCourse);
+    const savedUserCourse = await this.userCourseRepository.save(userCourse);
+    this.logger.log(`UserCourse created: ID ${savedUserCourse.id}`);
+    return savedUserCourse;
   }
 
   async findUserCourse(userId: number, courseId: number) {

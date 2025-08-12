@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Purchase } from './entities/purchase.entity';
@@ -9,9 +9,10 @@ import { CategoryService } from '../category/category.service';
 import { UserCourseService } from '../user-course/user-course.service';
 import { LevelService } from '../level/level.service';
 
-
 @Injectable()
 export class PurchasesService {
+  private readonly logger = new Logger(PurchasesService.name);
+
   constructor(
     @InjectRepository(Purchase)
     private purchasesRepository: Repository<Purchase>,
@@ -23,6 +24,7 @@ export class PurchasesService {
   ) {}
 
   async create(createPurchaseDto: CreatePurchaseDto, userId: number) {
+    this.logger.log(`Creating purchase for userId: ${userId}, courseId: ${createPurchaseDto.courseId}`);
     const user = await this.usersService.findOne(userId);
     if (!user) {
       throw new NotFoundException(`Foydalanuvchi topilmadi`);
@@ -74,6 +76,7 @@ export class PurchasesService {
     });
 
     const saved = await this.purchasesRepository.save(purchase);
+    this.logger.log(`Purchase created: ID ${saved.id}`);
 
     return {
       id: saved.id,
@@ -102,24 +105,36 @@ export class PurchasesService {
   }
 
   async confirmPurchase(purchaseId: number) {
+    this.logger.log(`Confirming purchase: ID ${purchaseId}`);
     const purchase = await this.purchasesRepository.findOne({
       where: { id: purchaseId },
       relations: ['user', 'course', 'category'],
     });
     if (!purchase) {
+      this.logger.error(`Purchase ID ${purchaseId} not found`);
       throw new NotFoundException(`Xarid topilmadi`);
     }
 
     if (!purchase.user || !purchase.course || !purchase.category) {
+      this.logger.error(`Purchase ID ${purchaseId} has incomplete data`);
       throw new NotFoundException(`Xarid ma'lumotlari to'liq emas`);
     }
 
     purchase.status = 'paid';
     const saved = await this.purchasesRepository.save(purchase);
+    this.logger.log(`Purchase ID ${purchaseId} status updated to paid`);
 
     const existingUserCourse = await this.userCourseService.findUserCourse(purchase.user.id, purchase.course.id);
     if (!existingUserCourse || existingUserCourse.expiresAt <= new Date()) {
-      await this.userCourseService.assignCourseToUser(purchase.user.id, purchase.course.id, purchase.category.id, purchase.degree);
+      const userCourse = await this.userCourseService.assignCourseToUser(
+        purchase.user.id,
+        purchase.course.id,
+        purchase.category.id,
+        purchase.degree,
+      );
+      this.logger.log(`Course assigned to user: userId=${purchase.user.id}, courseId=${purchase.course.id}, userCourseId=${userCourse.id}`);
+    } else {
+      this.logger.warn(`Course already assigned and active: userId=${purchase.user.id}, courseId=${purchase.course.id}`);
     }
 
     return {
