@@ -17,8 +17,9 @@ export class DocumentsService {
     if (!user) {
       throw new NotFoundException(`Foydalanuvchi ID ${userId} topilmadi`);
     }
+
     const document = this.documentRepository.create({
-      fileName: file.originalname,
+      fileName: file.originalname, // Bu joyda allaqachon UTF-8 bo'ladi
       fileData: file.buffer,
       user,
     });
@@ -56,7 +57,7 @@ export class DocumentsService {
       order: { createdAt: 'DESC' },
     });
 
-    return documents.map((doc) => ({
+    return documents.map(doc => ({
       id: doc.id,
       fileName: doc.fileName,
       createdAt: doc.createdAt,
@@ -78,11 +79,12 @@ export class DocumentsService {
     let mimeType = 'application/octet-stream';
 
     if (extension) {
-      if (['pdf'].includes(extension)) mimeType = 'application/pdf';
-      else if (['doc'].includes(extension)) mimeType = 'application/msword';
-      else if (['docx'].includes(extension)) mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      if (extension === 'pdf') mimeType = 'application/pdf';
+      else if (extension === 'doc') mimeType = 'application/msword';
+      else if (extension === 'docx')
+        mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       else if (['jpg', 'jpeg'].includes(extension)) mimeType = 'image/jpeg';
-      else if (['png'].includes(extension)) mimeType = 'image/png';
+      else if (extension === 'png') mimeType = 'image/png';
     }
 
     return { buffer: document.fileData, fileName: document.fileName, mimeType };

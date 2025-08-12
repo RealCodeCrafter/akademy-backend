@@ -29,7 +29,9 @@ export class DocumentsController {
         const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
         if (!allowedTypes.includes(extname(file.originalname).toLowerCase())) {
           return cb(
-            new BadRequestException('Faqat PDF, DOC, DOCX, JPG, JPEG, PNG fayllar ruxsat etiladi'),
+            new BadRequestException(
+              'Faqat PDF, DOC, DOCX, JPG, JPEG, PNG fayllar ruxsat etiladi',
+            ),
             false,
           );
         }
@@ -44,6 +46,10 @@ export class DocumentsController {
     if (!file) {
       throw new BadRequestException('Fayl yuklanmadi');
     }
+
+    // Majburan UTF-8 ga konvertatsiya qilish
+    file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8');
+
     return this.documentsService.uploadDocument(+userId, file);
   }
 
