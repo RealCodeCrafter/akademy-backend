@@ -7,6 +7,8 @@ import {
   UnauthorizedException,
   BadRequestException,
   Logger,
+  All,
+  HttpCode,
 } from '@nestjs/common';
 import { PaymentsService } from './payment.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -54,28 +56,24 @@ export class PaymentsController {
       throw err;
     }
   }
-@Post('webhook')
-async handleWebhook(@Body('callbackData') callbackData: string) {
-  this.logger.log(`Webhook so'rovi keldi: ${callbackData}`);
+  @All('webhook')
+  @HttpCode(200) // Har doim 200 qaytarsin
+  async handleWebhook(@Body() body: any) {
+    this.logger.log(`Webhook so'rovi keldi: ${JSON.stringify(body)}`);
 
-  // Agar callbackData yo'q bo'lsa — bu test request bo'lishi mumkin
-  if (!callbackData) {
-    this.logger.warn('callbackData parametri yo‘q — ehtimol bu test so‘rov');
-    return { ok: true }; // 200 OK qaytariladi
-  }
+    if (!body?.callbackData) {
+      this.logger.warn('callbackData yo‘q — ehtimol bu test yoki HEAD/GET so‘rovi');
+      return { ok: true }; // Test request uchun 200 qaytarish
+    }
 
-  // Real payment callback ishlov
-  try {
-    const result = await this.paymentsService.handleCallback(callbackData);
-    this.logger.log(
-      `Webhook muvaffaqiyatli qayta ishlendi: result=${JSON.stringify(result)}`
-    );
-    return result;
-  } catch (err) {
-    this.logger.error(`Webhook qayta ishlashda xato: ${err.message}`);
-    // Hatto xato bo‘lsa ham 200 qaytarish — webhook retry’larni oldini olish uchun
-    return { error: true };
+    try {
+      const result = await this.paymentsService.handleCallback(body.callbackData);
+      this.logger.log(`Webhook muvaffaqiyatli qayta ishlendi: ${JSON.stringify(result)}`);
+      return result;
+    } catch (err) {
+      this.logger.error(`Webhook qayta ishlashda xato: ${err.message}`);
+      return { error: true }; // Xato bo‘lsa ham 200 qaytarish
+    }
   }
-}
 
 }
