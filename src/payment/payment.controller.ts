@@ -1,4 +1,3 @@
-// payments.controller.ts
 import {
   Controller,
   Post,
@@ -45,19 +44,25 @@ export class PaymentsController {
   @HttpCode(200)
   async handleWebhook(@Req() req: Request) {
     try {
+      const contentType = req.get('Content-Type') || 'undefined';
       const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-      this.logger.debug(`Webhook raw body: ${rawBody}, Content-Type: ${req.get('Content-Type') || 'undefined'}`);
+      this.logger.debug(`Webhook raw body: ${rawBody}, Content-Type: ${contentType}`);
 
       if (!rawBody) {
         this.logger.warn('Webhook bo‘sh keldi');
         return { ok: true };
       }
 
+      if (contentType !== 'text/plain' && contentType !== 'application/jwt') {
+        this.logger.warn(`Noto‘g‘ri Content-Type: ${contentType}`);
+        return { ok: true, error: 'Invalid Content-Type, expected text/plain or application/jwt' };
+      }
+
       await this.paymentsService.handleCallback(rawBody);
       return { ok: true };
     } catch (err) {
       this.logger.error(`Webhook xato: ${err.message}`, err.stack);
-      return { ok: true };
+      return { ok: true, error: err.message };
     }
   }
 
