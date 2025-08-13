@@ -19,7 +19,7 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.use(express.text({ type: 'text/plain' }));
+  app.use('/payments/webhook', express.text({ type: '*/*' }));
 
   await app.listen(7000, '0.0.0.0');
 }

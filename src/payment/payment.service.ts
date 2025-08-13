@@ -1,6 +1,8 @@
-
-
-import { Injectable, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Payment } from './entities/payment.entity';
@@ -13,7 +15,6 @@ import { LevelService } from '../level/level.service';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as jwt from 'jsonwebtoken';
-
 
 @Injectable()
 export class PaymentsService {
@@ -29,145 +30,137 @@ export class PaymentsService {
   ) {}
 
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
-  const user = await this.usersService.findOne(userId);
-  if (!user) throw new NotFoundException('Пользователь не найден');
+    const user = await this.usersService.findOne(userId);
+    if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
 
-  const course = await this.coursesService.findOne(createPaymentDto.courseId);
-  if (!course) throw new NotFoundException('Курс не найден');
+    const course = await this.coursesService.findOne(createPaymentDto.courseId);
+    if (!course) throw new NotFoundException('Kurs topilmadi');
 
-  const category = await this.categoryService.findOne(createPaymentDto.categoryId);
-  if (!category) throw new NotFoundException('Категория не найдена');
+    const category = await this.categoryService.findOne(createPaymentDto.categoryId);
+    if (!category) throw new NotFoundException('Kategoriya topilmadi');
 
-  if (!course.categories?.some(cat => cat.id === category.id)) {
-    throw new BadRequestException('Эта категория не относится к данному курсу');
-  }
-
-  let degree = category.name;
-  if (createPaymentDto.levelId) {
-    const level = await this.levelService.findOne(createPaymentDto.levelId);
-    if (!level) throw new NotFoundException('Уровень не найден');
-
-    const isLinked = await this.categoryService.isLevelLinkedToCategory(
-      createPaymentDto.categoryId,
-      createPaymentDto.levelId
-    );
-    if (!isLinked) {
-      throw new BadRequestException('Этот уровень не относится к данной категории');
+    if (!course.categories?.some(cat => cat.id === category.id)) {
+      throw new BadRequestException('Kategoriya ushbu kursga tegishli emas');
     }
-    degree = level.name;
-  }
 
-  // Purchase yozish
-  const purchase = await this.purchasesService.create(createPaymentDto, userId);
-  if (!purchase?.id || isNaN(Number(purchase.id))) {
-    throw new BadRequestException('Purchase ID noto‘g‘ri');
-  }
+    let degree = category.name;
+    if (createPaymentDto.levelId) {
+      const level = await this.levelService.findOne(createPaymentDto.levelId);
+      if (!level) throw new NotFoundException('Daraja topilmadi');
 
-  const transactionId = `txn_${Date.now()}`;
-  const payment = this.paymentRepository.create({
-    amount: Number(category.price),
-    transactionId,
-    status: 'pending',
-    user,
-    purchaseId: Number(purchase.id),
-    purchase,
-  });
-  const savedPayment = await this.paymentRepository.save(payment);
-
-  const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
-  const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID');
-  const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
-
-  if (!token || !merchantId || !customerCode) {
-    throw new BadRequestException('Конфигурация Tochka неполная');
-  }
-
-  try {
-    const response = await axios.post(
-      `https://enter.tochka.com/uapi/acquiring/v1.0/payments`,
-      {
-        Data: {
-          customerCode,
-          amount: Number(category.price.toFixed(2)),
-          purpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
-          paymentMode: ['card'],
-          saveCard: false,
-          merchantId,
-          preAuthorization: false,
-          ttl: 10080,
-          sourceName: 'A+ Academy'
-        }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        }
+      const isLinked = await this.categoryService.isLevelLinkedToCategory(
+        createPaymentDto.categoryId,
+        createPaymentDto.levelId,
+      );
+      if (!isLinked) {
+        throw new BadRequestException('Daraja ushbu kategoriya bilan bog‘liq emas');
       }
-    );
+      degree = level.name;
+    }
 
-    const { paymentLink, operationId } = response.data.Data;
-    savedPayment.transactionId = operationId;
-    await this.paymentRepository.save(savedPayment);
+    const purchase = await this.purchasesService.create(createPaymentDto, userId);
+    if (!purchase?.id) {
+      throw new BadRequestException('Purchase ID noto‘g‘ri');
+    }
 
-    return {
-      paymentUrl: paymentLink,
-      paymentId: savedPayment.id,
-      purchaseId: purchase.id,
-      transactionId: operationId,
-    };
-  } catch (err) {
-    console.error('Tochka API Error:', err.response?.data || err.message);
-    throw new BadRequestException(`Ошибка Tochka API: ${err.message}`);
+    const payment = this.paymentRepository.create({
+      amount: Number(category.price),
+      transactionId: `txn_${Date.now()}`,
+      status: 'pending',
+      user,
+      purchaseId: Number(purchase.id),
+      purchase,
+    });
+    const savedPayment = await this.paymentRepository.save(payment);
+
+    const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
+    const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID');
+    const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
+
+    if (!token || !merchantId || !customerCode) {
+      throw new BadRequestException('Tochka konfiguratsiyasi to‘liq emas');
+    }
+
+    try {
+      const response = await axios.post(
+        `https://enter.tochka.com/uapi/acquiring/v1.0/payments`,
+        {
+          Data: {
+            customerCode,
+            amount: Number(category.price),
+            purpose: `Kurs: ${course.name}, Kategoriya: ${category.name}, Daraja: ${degree}`,
+            paymentMode: ['card'],
+            merchantId,
+            ttl: 10080,
+            sourceName: 'A+ Academy',
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      const paymentLink = response.data?.Data?.paymentLink;
+      const operationId = response.data?.Data?.operationId;
+      if (!paymentLink || !operationId) {
+        throw new Error('Tochka javobida paymentLink yoki operationId yo‘q');
+      }
+
+      savedPayment.transactionId = operationId;
+      await this.paymentRepository.save(savedPayment);
+
+      return {
+        paymentUrl: paymentLink,
+        paymentId: savedPayment.id,
+        purchaseId: purchase.id,
+        transactionId: operationId,
+      };
+    } catch (err) {
+      throw new BadRequestException(
+        `Tochka API xato: ${err.response?.data?.error || err.message}`,
+      );
+    }
   }
-}
 
-async handleCallback(callbackData: string) {
-  if (!callbackData) {
-    throw new BadRequestException('callbackData не предоставлен');
-  }
+  async handleCallback(callbackData: string) {
+    const publicKey = this.configService
+      .get<string>('TOCHKA_PUBLIC_KEY')
+      ?.replace(/\\n/g, '\n');
 
-  const publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY')?.replace(/\\n/g, '\n');
-  if (!publicKey) {
-    throw new BadRequestException('Публичный ключ Tochka не найден');
-  }
+    if (!publicKey) {
+      throw new BadRequestException('Tochka public key topilmadi');
+    }
 
-  let decoded: any;
-  try {
-    decoded = jwt.verify(callbackData, publicKey, { algorithms: ['RS256'] });
-  } catch (err) {
-    console.error('JWT verification error:', err);
-    throw new BadRequestException('Неверная подпись вебхука');
-  }
+    let decoded: any;
+    try {
+      decoded = jwt.verify(callbackData, publicKey, { algorithms: ['RS256'] });
+    } catch {
+      throw new BadRequestException('Webhook imzosi noto‘g‘ri');
+    }
 
-  const { event, data } = decoded;
-  console.log('Webhook event:', event, data);
+    const { event, data } = decoded;
+    if (event !== 'acquiringInternetPayment') {
+      throw new BadRequestException(`Noma’lum event: ${event}`);
+    }
 
-  if (event === 'acquiringInternetPayment') {
     const payment = await this.paymentRepository.findOne({
       where: { transactionId: data.operationId },
       relations: ['purchase'],
     });
-
-    if (!payment) throw new NotFoundException('Платеж не найден');
-    if (!payment.purchaseId || isNaN(Number(payment.purchaseId))) {
-      throw new BadRequestException('Purchase ID callback’da noto‘g‘ri');
-    }
+    if (!payment) throw new NotFoundException('To‘lov topilmadi');
 
     if (data.status === 'APPROVED') {
       payment.status = 'completed';
       await this.paymentRepository.save(payment);
       await this.purchasesService.confirmPurchase(Number(payment.purchaseId));
-    } else if (['REFUNDED', 'EXPIRED', 'REFUNDED_PARTIALLY'].includes(data.status)) {
+    } else if (['REFUNDED', 'EXPIRED'].includes(data.status)) {
       payment.status = 'failed';
       await this.paymentRepository.save(payment);
-    } else {
-      console.warn('Неизвестный статус платежа:', data.status);
     }
+
     return { status: 'OK' };
   }
-
-  throw new BadRequestException(`Неизвестный тип события: ${event}`);
-}
-
 }

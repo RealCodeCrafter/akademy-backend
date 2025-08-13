@@ -36,39 +36,25 @@ export class PaymentsController {
       throw new UnauthorizedException('Foydalanuvchi aniqlanmadi');
     }
 
-    this.logger.log(
-      `To'lov boshlash: userId=${userId}, courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}, levelId=${createPaymentDto.levelId}`,
-    );
-
-    const result = await this.paymentsService.startPayment(
-      createPaymentDto,
-      userId,
-    );
-
-    this.logger.log(
-      `To'lov yaratildi: paymentId=${result.paymentId}, transactionId=${result.transactionId}`,
-    );
-
-    return result;
+    this.logger.log(`To'lov boshlash: userId=${userId}`);
+    return await this.paymentsService.startPayment(createPaymentDto, userId);
   }
 
   @All('webhook')
   @HttpCode(200)
-  async handleWebhook(@Body() body: any) {
-    if (!body?.callbackData) {
-      this.logger.warn(
-        'Webhook ping/test request — callbackData yo‘q',
-      );
-      return { ok: true };
-    }
-
+  async handleWebhook(@Req() req: Request) {
     try {
-      const result = await this.paymentsService.handleCallback(body.callbackData);
-      this.logger.log(`Webhook muvaffaqiyatli: ${JSON.stringify(result)}`);
-      return result;
+      const rawBody = req.body; // text/plain bo‘lib keladi
+      if (!rawBody || typeof rawBody !== 'string') {
+        this.logger.warn('Webhook bo‘sh keldi');
+        return { ok: true };
+      }
+
+      await this.paymentsService.handleCallback(rawBody);
+      return { ok: true };
     } catch (err) {
       this.logger.error(`Webhook xato: ${err.message}`);
-      return { error: true };
+      return { ok: true }; // bank qayta yuborishi uchun
     }
   }
 }
