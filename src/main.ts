@@ -7,7 +7,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.use(bodyParser.json({ type: ['application/json', 'application/jwt'] }));
-  app.use(bodyParser.text({ type: 'text/plain' }));
+  app.use(bodyParser.text({ type: ['text/plain', 'text/plain; charset=utf-8'] }));
 
   app.useGlobalPipes(
     new ValidationPipe({
