@@ -123,33 +123,6 @@ export class PaymentsService {
     }
   }
 // payments.service.ts (faqat o‘zgargan qismlar)
-async checkPaymentStatus(requestId: string) {
-  const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
-  if (!token) {
-    console.error('[PaymentsService] Tochka JWT token topilmadi');
-    throw new BadRequestException('Tochka JWT token topilmadi');
-  }
-
-  try {
-    const response = await axios.get(
-      `https://enter.tochka.com/uapi/payment/v1.0/status/${requestId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-    );
-    console.log(`[PaymentsService] Payment status response for requestId=${requestId}: ${JSON.stringify(response.data, null, 2)}`);
-    return response.data.Data;
-  } catch (err) {
-    const errorMessage = err.response?.data
-      ? JSON.stringify(err.response.data, null, 2)
-      : err.message;
-    console.error(`[PaymentsService] Payment status xatosi for requestId=${requestId}: ${errorMessage}`);
-    throw new BadRequestException(`Payment status xatosi: ${errorMessage}`);
-  }
-}
-
 async handleCallback(rawBody: string) {
   const publicKey = this.configService
     .get<string>('TOCHKA_PUBLIC_KEY')
@@ -170,8 +143,16 @@ async handleCallback(rawBody: string) {
     decoded = jwt.verify(rawBody, publicKey, { algorithms: ['RS256'] });
     console.log('[PaymentsService] Webhook decoded payload:', JSON.stringify(decoded, null, 2));
   } catch (err) {
-    console.error('[PaymentsService] Webhook imzo xatosi:', err.message);
-    throw new BadRequestException('Webhook imzosi noto‘g‘ri yoki buzilgan');
+    console.error('[PaymentsService] Webhook imzo xatosi:', err.message, 'Raw body:', rawBody);
+    try {
+      // JSON formatini tekshirish
+      const parsed = JSON.parse(rawBody);
+      console.warn('[PaymentsService] Webhook JWT emas, JSON formatida:', JSON.stringify(parsed, null, 2));
+      return { status: 'ERROR', reason: 'Webhook is not a valid JWT' };
+    } catch (jsonErr) {
+      console.error('[PaymentsService] Webhook JSON sifatida ham noto‘g‘ri:', jsonErr.message);
+      throw new BadRequestException('Webhook imzosi noto‘g‘ri yoki buzilgan');
+    }
   }
 
   if (decoded.webhookType !== 'acquiringInternetPayment') {
@@ -214,5 +195,32 @@ async handleCallback(rawBody: string) {
   }
 
   return { status: 'OK' };
+}
+
+async checkPaymentStatus(requestId: string) {
+  const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
+  if (!token) {
+    console.error('[PaymentsService] Tochka JWT token topilmadi');
+    throw new BadRequestException('Tochka JWT token topilmadi');
+  }
+
+  try {
+    const response = await axios.get(
+      `https://enter.tochka.com/uapi/payment/v1.0/status/${requestId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    console.log(`[PaymentsService] Payment status response for requestId=${requestId}: ${JSON.stringify(response.data, null, 2)}`);
+    return response.data.Data;
+  } catch (err) {
+    const errorMessage = err.response?.data
+      ? JSON.stringify(err.response.data, null, 2)
+      : err.message;
+    console.error(`[PaymentsService] Payment status xatosi for requestId=${requestId}: ${errorMessage}`);
+    throw new BadRequestException(`Payment status xatosi: ${errorMessage}`);
+  }
 }
 }
