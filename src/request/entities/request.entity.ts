@@ -1,3 +1,4 @@
+// request.entity.ts
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 
@@ -24,6 +25,6 @@ export class Request {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @ManyToOne(() => User, (user) => user.requests, { nullable: true, onDelete: 'CASCADE', cascade: true })
+  @ManyToOne(() => User, (user) => user.requests, { nullable: true, onDelete: 'CASCADE' })
   user: User;
 }

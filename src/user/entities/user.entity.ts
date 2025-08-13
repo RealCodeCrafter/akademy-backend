@@ -1,3 +1,4 @@
+// user.entity.ts
 import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
 import { Request } from '../../request/entities/request.entity';
 import { Purchase } from '../../purchases/entities/purchase.entity';
@@ -52,19 +53,19 @@ export class User {
   @Column({ nullable: true })
   studentBirthDate: string;
 
-  @OneToMany(() => Purchase, (purchase) => purchase.user, { cascade: true })
+  @OneToMany(() => Purchase, (purchase) => purchase.user, { cascade: ['insert', 'update'] })
   purchases: Purchase[];
 
-  @OneToMany(() => Request, (request) => request.user, { cascade: true })
+  @OneToMany(() => Request, (request) => request.user, { cascade: ['insert', 'update'] })
   requests: Request[];
 
-  @OneToMany(() => Payment, (payment) => payment.user, { cascade: true })
+  @OneToMany(() => Payment, (payment) => payment.user, { cascade: ['insert', 'update'] })
   payments: Payment[];
 
-  @OneToMany(() => UserCourse, (userCourse) => userCourse.user, { cascade: true })
+  @OneToMany(() => UserCourse, (userCourse) => userCourse.user, { cascade: ['insert', 'update'] })
   userCourses: UserCourse[];
 
-  @OneToMany(() => UserDocument, (userDocument) => userDocument.user, { cascade: true })
+  @OneToMany(() => UserDocument, (userDocument) => userDocument.user, { cascade: ['insert', 'update'] })
   documents: UserDocument[];
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })

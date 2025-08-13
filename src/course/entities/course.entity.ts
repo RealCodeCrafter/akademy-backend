@@ -1,3 +1,4 @@
+// course.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToMany, JoinTable } from 'typeorm';
 import { Purchase } from '../../purchases/entities/purchase.entity';
 import { Category } from '../../category/entities/category.entity';
@@ -14,13 +15,13 @@ export class Course {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @OneToMany(() => Purchase, (purchase) => purchase.course, { cascade: true })
+  @OneToMany(() => Purchase, (purchase) => purchase.course, { cascade: ['insert', 'update'] })
   purchases: Purchase[];
 
-  @OneToMany(() => UserCourse, (userCourse) => userCourse.course, { cascade: true })
+  @OneToMany(() => UserCourse, (userCourse) => userCourse.course, { cascade: ['insert', 'update'] })
   userCourses: UserCourse[];
 
-  @ManyToMany(() => Category, (category) => category.courses, { cascade: true })
+  @ManyToMany(() => Category, (category) => category.courses, { cascade: ['insert', 'update'] })
   @JoinTable()
   categories: Category[];
 }

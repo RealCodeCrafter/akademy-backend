@@ -1,10 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToMany, JoinTable, OneToMany, ManyToOne } from 'typeorm';
+// category.entity.ts
+import { Entity, PrimaryGeneratedColumn, Column, ManyToMany, JoinTable } from 'typeorm';
 import { Course } from '../../course/entities/course.entity';
 import { Level } from '../../level/entities/level.entity';
-import { Purchase } from '../../purchases/entities/purchase.entity';
-import { UserCourse } from '../../user-course/entities/user-course.entity';
-import { User } from '../../user/entities/user.entity';
-import { Payment } from 'src/payment/entities/payment.entity';
 
 @Entity()
 export class Category {
@@ -23,10 +20,10 @@ export class Category {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @ManyToMany(() => Course, (course) => course.categories, { cascade: true })
+  @ManyToMany(() => Course, (course) => course.categories)
   courses: Course[];
 
-  @ManyToMany(() => Level, (level) => level.categories, { cascade: true })
+  @ManyToMany(() => Level, (level) => level.categories, { cascade: ['insert', 'update'] })
   @JoinTable()
   levels: Level[];
 }

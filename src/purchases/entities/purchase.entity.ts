@@ -1,3 +1,4 @@
+// purchase.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { Course } from '../../course/entities/course.entity';
@@ -24,15 +25,15 @@ export class Purchase {
   @Column({ default: 'pending' })
   status: 'pending' | 'paid' | 'failed';
 
-  @ManyToOne(() => Category, { nullable: true, onDelete: 'CASCADE', cascade: true })
+  @ManyToOne(() => Category, { nullable: true, onDelete: 'CASCADE' })
   category: Category;
 
-  @ManyToOne(() => User, (user) => user.purchases, { onDelete: 'CASCADE', cascade: true })
+  @ManyToOne(() => User, (user) => user.purchases, { onDelete: 'CASCADE' })
   user: User;
 
-  @ManyToOne(() => Course, (course) => course.purchases, { onDelete: 'CASCADE', cascade: true })
+  @ManyToOne(() => Course, (course) => course.purchases, { onDelete: 'CASCADE' })
   course: Course;
 
-  @OneToMany(() => Payment, (payment) => payment.purchase, { cascade: true })
+  @OneToMany(() => Payment, (payment) => payment.purchase, { cascade: ['insert', 'update'] })
   payments: Payment[];
 }
