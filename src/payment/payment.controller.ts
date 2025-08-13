@@ -43,7 +43,7 @@ export class PaymentsController {
   @HttpCode(200)
   async handleWebhook(@Req() req: Request) {
     try {
-      const rawBody = req.body?.toString('utf8'); // Bank JWT stringni yuboradi
+      const rawBody = req.body?.toString('utf8');
       this.logger.debug(`Webhook raw body: ${rawBody}`);
 
       if (!rawBody) {

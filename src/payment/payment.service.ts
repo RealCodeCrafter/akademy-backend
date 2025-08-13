@@ -59,7 +59,6 @@ export class PaymentsService {
       degree = level.name;
     }
 
-    // Purchase yaratish
     const purchase = await this.purchasesService.create(createPaymentDto, userId);
     if (!purchase?.id) throw new BadRequestException('Purchase ID noto‘g‘ri');
 
@@ -125,7 +124,7 @@ export class PaymentsService {
   async handleCallback(rawBody: string) {
     const publicKey = this.configService
       .get<string>('TOCHKA_PUBLIC_KEY')
-      ?.replace(/\\n/g, '\n'); // Env-dagi \n larni real newline ga o‘tkazamiz
+      ?.replace(/\\n/g, '\n');
 
     if (!publicKey) {
       throw new BadRequestException('Tochka public key topilmadi');
@@ -141,24 +140,22 @@ export class PaymentsService {
 
     console.log('[PaymentsService] Webhook decoded payload:', decoded);
 
-    const { event, data } = decoded;
-
-    if (event !== 'acquiringInternetPayment') {
-      console.warn(`[PaymentsService] Noma’lum event turi: ${event}`);
-      return { status: 'IGNORED', reason: 'Unknown event type' };
+    if (decoded.webhookType !== 'acquiringInternetPayment') {
+      console.warn(`[PaymentsService] Noma’lum webhook turi: ${decoded.webhookType}`);
+      return { status: 'IGNORED', reason: 'Unknown webhook type' };
     }
 
     const payment = await this.paymentRepository.findOne({
-      where: { transactionId: data.operationId },
+      where: { transactionId: decoded.operationId },
       relations: ['purchase'],
     });
 
     if (!payment) {
-      console.error(`[PaymentsService] Payment topilmadi: operationId=${data.operationId}`);
+      console.error(`[PaymentsService] Payment topilmadi: operationId=${decoded.operationId}`);
       return { status: 'ERROR', reason: 'Payment not found' };
     }
 
-    switch (data.status) {
+    switch (decoded.status) {
       case 'APPROVED':
         payment.status = 'completed';
         await this.paymentRepository.save(payment);
@@ -172,11 +169,11 @@ export class PaymentsService {
       case 'DECLINED':
         payment.status = 'failed';
         await this.paymentRepository.save(payment);
-        console.log(`[PaymentsService] To‘lov muvaffaqiyatsiz: ${payment.id} (status=${data.status})`);
+        console.log(`[PaymentsService] To‘lov muvaffaqiyatsiz: ${payment.id} (status=${decoded.status})`);
         break;
 
       default:
-        console.warn(`[PaymentsService] Noma’lum to‘lov statusi: ${data.status}`);
+        console.warn(`[PaymentsService] Noma’lum to‘lov statusi: ${decoded.status}`);
         break;
     }
 

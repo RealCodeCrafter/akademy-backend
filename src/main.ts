@@ -1,3 +1,4 @@
+// main.ts
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -6,11 +7,7 @@ import * as bodyParser from 'body-parser';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Webhook route uchun raw body olish (signatura tekshirish uchun)
-  app.use(
-    '/payments/webhook',
-    bodyParser.raw({ type: '*/*' }),
-  );
+  app.use('/payments/webhook', bodyParser.text({ type: '*/*' }));
 
   app.useGlobalPipes(
     new ValidationPipe({

@@ -39,6 +39,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "iconv-lite": "^0.6.3",
+    "jwk-to-pem": "^2.0.7",
     "multer": "^2.0.2",
     "passport-jwt": "^4.0.1",
     "pem-jwk": "^2.0.0",
