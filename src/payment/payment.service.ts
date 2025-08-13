@@ -107,6 +107,7 @@ export class PaymentsService {
       const { paymentLink, operationId } = response.data.Data;
       savedPayment.transactionId = operationId;
       await this.paymentRepository.save(savedPayment);
+      console.log(`[PaymentsService] Payment saved with operationId: ${operationId}`);
 
       return {
         paymentUrl: paymentLink,
@@ -115,6 +116,7 @@ export class PaymentsService {
         transactionId: operationId,
       };
     } catch (err) {
+      console.error(`[PaymentsService] Tochka API xatosi: ${err.response?.data || err.message}`);
       throw new BadRequestException(
         `Tochka API xatosi: ${err.response?.data || err.message}`,
       );
@@ -183,5 +185,30 @@ export class PaymentsService {
     }
 
     return { status: 'OK' };
+  }
+
+  async checkPaymentStatus(requestId: string) {
+    const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
+    if (!token) {
+      throw new BadRequestException('Tochka JWT token topilmadi');
+    }
+
+    try {
+      const response = await axios.get(
+        `https://enter.tochka.com/uapi/payment/v1.0/status/${requestId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+      console.log(`[PaymentsService] Payment status response: ${JSON.stringify(response.data, null, 2)}`);
+      return response.data.Data;
+    } catch (err) {
+      console.error(`[PaymentsService] Payment status xatosi: ${err.response?.data || err.message}`);
+      throw new BadRequestException(
+        `Payment status xatosi: ${err.response?.data || err.message}`,
+      );
+    }
   }
 }

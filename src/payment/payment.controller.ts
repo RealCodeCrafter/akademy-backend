@@ -9,6 +9,8 @@ import {
   Logger,
   All,
   HttpCode,
+  Get,
+  Param,
 } from '@nestjs/common';
 import { PaymentsService } from './payment.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -44,7 +46,7 @@ export class PaymentsController {
   async handleWebhook(@Req() req: Request) {
     try {
       const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-      this.logger.debug(`Webhook raw body: ${rawBody}`);
+      this.logger.debug(`Webhook raw body: ${rawBody}, Content-Type: ${req.get('Content-Type')}`);
 
       if (!rawBody) {
         this.logger.warn('Webhook bo‘sh keldi');
@@ -57,5 +59,10 @@ export class PaymentsController {
       this.logger.error(`Webhook xato: ${err.message}`, err.stack);
       return { ok: true };
     }
+  }
+
+  @Get('status/:requestId')
+  async checkPaymentStatus(@Param('requestId') requestId: string) {
+    return this.paymentsService.checkPaymentStatus(requestId);
   }
 }
