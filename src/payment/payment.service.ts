@@ -125,36 +125,29 @@ export class PaymentsService {
     }
   }
 
-  async handleCallback(callbackData: any) {
-  // 🔹 Agar bu test rejimi bo'lsa, publicKey kerak emas
-  const publicKey = this.configService
-    .get<string>('TOCHKA_PUBLIC_KEY')
-    ?.replace(/\\n/g, '\n');
-
-  if (!publicKey) {
-    throw new BadRequestException('Tochka public key topilmadi');
+  async handleCallback(callbackData: string) {
+  if (typeof callbackData !== 'string') {
+    throw new BadRequestException('Webhook body string bo‘lishi kerak');
   }
 
-  let decoded: any;
+  // 🔹 Old va oxiridagi bo‘sh joy / yangi qatordan tozalash
+  callbackData = callbackData.trim();
 
-  // ========================
-  // ✅ TEST rejimi (Postman uchun)
-  if (typeof callbackData === 'string') {
-    try {
-      callbackData = JSON.parse(callbackData);
-    } catch {
-      throw new BadRequestException('JSON format xato');
-    }
+  let parsed: any;
+  try {
+    parsed = JSON.parse(callbackData);
+  } catch {
+    throw new BadRequestException('Webhook JSON format xato');
   }
 
-  decoded = {
+  // 🔹 Test rejimi uchun "decoded" ni qo‘lda yasash
+  const decoded = {
     event: 'acquiringInternetPayment',
     data: {
-      operationId: callbackData.paymentId,
-      status: callbackData.status === 'success' ? 'APPROVED' : 'FAILED',
+      operationId: parsed.callbackData.paymentId,
+      status: parsed.callbackData.status === 'success' ? 'APPROVED' : 'FAILED',
     },
   };
-  // ========================
 
   const { event, data } = decoded;
   if (event !== 'acquiringInternetPayment') {
