@@ -39,9 +39,10 @@ export class PaymentsController {
     this.logger.log(`To'lov boshlash: userId=${userId}`);
     return this.paymentsService.startPayment(createPaymentDto, userId);
   }
-@All('webhook')
-@HttpCode(200)
-async handleWebhook(@Req() req: Request) {
+
+  @All('webhook')
+  @HttpCode(200)
+  async handleWebhook(@Req() req: Request) {
   try {
     const rawBody = req.body as string;
 
@@ -61,5 +62,4 @@ async handleWebhook(@Req() req: Request) {
     return { ok: true };
   }
 }
-
 }
