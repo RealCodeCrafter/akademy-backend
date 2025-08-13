@@ -1,6 +1,9 @@
-
-
-import { Injectable, NotFoundException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Payment } from './entities/payment.entity';
@@ -13,7 +16,6 @@ import { LevelService } from '../level/level.service';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import * as jwt from 'jsonwebtoken';
-
 
 @Injectable()
 export class PaymentsService {
@@ -28,7 +30,6 @@ export class PaymentsService {
     private configService: ConfigService,
   ) {}
 
-
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
     const user = await this.usersService.findOne(userId);
     if (!user) {
@@ -40,14 +41,20 @@ export class PaymentsService {
       throw new NotFoundException('Курс не найден');
     }
 
-    const category = await this.categoryService.findOne(createPaymentDto.categoryId);
+    const category = await this.categoryService.findOne(
+      createPaymentDto.categoryId,
+    );
     if (!category) {
       throw new NotFoundException('Категория не найдена');
     }
 
-    const isCategoryLinked = course.categories?.some(cat => cat.id === category.id);
+    const isCategoryLinked = course.categories?.some(
+      (cat) => cat.id === category.id,
+    );
     if (!isCategoryLinked) {
-      throw new NotFoundException('Эта категория не относится к данному курсу');
+      throw new NotFoundException(
+        'Эта категория не относится к данному курсу',
+      );
     }
 
     let degree: string;
@@ -56,16 +63,25 @@ export class PaymentsService {
       if (!level) {
         throw new NotFoundException('Уровень не найден');
       }
-      const isLevelLinked = await this.categoryService.isLevelLinkedToCategory(createPaymentDto.categoryId, createPaymentDto.levelId);
+      const isLevelLinked =
+        await this.categoryService.isLevelLinkedToCategory(
+          createPaymentDto.categoryId,
+          createPaymentDto.levelId,
+        );
       if (!isLevelLinked) {
-        throw new BadRequestException('Этот уровень не относится к данной категории');
+        throw new BadRequestException(
+          'Этот уровень не относится к данной категории',
+        );
       }
       degree = level.name;
     } else {
       degree = category.name;
     }
 
-    const purchase = await this.purchasesService.create(createPaymentDto, userId);
+    const purchase = await this.purchasesService.create(
+      createPaymentDto,
+      userId,
+    );
 
     const transactionId = `txn_${Date.now()}`;
     const payment = this.paymentRepository.create({
@@ -81,16 +97,22 @@ export class PaymentsService {
 
     const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
     if (!token) {
-      throw new BadRequestException('TOCHKA_JWT_TOKEN не найден в конфигурации');
+      throw new BadRequestException(
+        'TOCHKA_JWT_TOKEN не найден в конфигурации',
+      );
     }
 
-    const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID')
+    const merchantId =
+      this.configService.get<string>('TOCHKA_MERCHANT_ID') || '';
+
     try {
       const response = await axios.post(
         `https://enter.tochka.com/uapi/acquiring/v1.0/payments`,
         {
           Data: {
-            customerCode: this.configService.get<string>('TOCHKA_CUSTOMER_CODE') || '305149818',
+            customerCode:
+              this.configService.get<string>('TOCHKA_CUSTOMER_CODE') ||
+              '305149818',
             amount: category.price.toFixed(2),
             purpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
             redirectUrl: 'https://aplusacademy.ru/payment-success',
@@ -100,7 +122,7 @@ export class PaymentsService {
             merchantId: merchantId,
             preAuthorization: false,
             ttl: 10080,
-            sourceName: 'A+ Academy'
+            sourceName: 'A+ Academy',
           },
         },
         {
@@ -108,7 +130,7 @@ export class PaymentsService {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
           },
-        }
+        },
       );
 
       const data = response.data.Data;
@@ -125,36 +147,72 @@ export class PaymentsService {
         transactionId: operationId,
       };
     } catch (err) {
+      console.error('❌ To‘lov yaratishda xatolik yuz berdi:');
+      console.error('📌 To‘liq error obyekti:', err);
+
       const status = err.response?.status || 'unknown';
-      const responseData = JSON.stringify(err.response?.data || {});
+      console.error('📌 Status:', status);
+
+      console.error('📌 Headers:', err.response?.headers);
+      console.error('📌 Data:', err.response?.data);
+
+      if (err.config) {
+        console.error('📌 Yuborilgan request config:', {
+          url: err.config.url,
+          method: err.config.method,
+          headers: err.config.headers,
+          data: err.config.data,
+        });
+      }
+
       if (status === 403) {
         throw new UnauthorizedException('Недостаточно прав токена');
       }
       if (status === 400) {
-        throw new BadRequestException(`Неверный формат запроса: ${responseData}`);
+        throw new BadRequestException(
+          `Неверный формат запроса: ${JSON.stringify(
+            err.response?.data || {},
+          )}`,
+        );
       }
       if (status === 424) {
-        throw new BadRequestException(`Ошибка зависимости API: ${responseData}`);
+        throw new BadRequestException(
+          `Ошибка зависимости API: ${JSON.stringify(
+            err.response?.data || {},
+          )}`,
+        );
       }
-      throw new BadRequestException(`Ошибка создания платежа: ${err.message}, статус: ${status}, данные: ${responseData}`);
+      throw new BadRequestException(
+        `Ошибка создания платежа: ${err.message}, статус: ${status}, данные: ${JSON.stringify(
+          err.response?.data || {},
+        )}`,
+      );
     }
   }
 
   async handleCallback(callbackData: string) {
     if (!callbackData) {
-      throw new BadRequestException('Параметр callbackData не предоставлен');
+      throw new BadRequestException(
+        'Параметр callbackData не предоставлен',
+      );
     }
 
     const publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY');
     if (!publicKey) {
-      throw new BadRequestException('Публичный ключ Tochka не найден');
+      throw new BadRequestException(
+        'Публичный ключ Tochka не найден',
+      );
     }
 
     let decoded: any;
     try {
-      decoded = jwt.verify(callbackData, publicKey, { algorithms: ['RS256'] });
+      decoded = jwt.verify(callbackData, publicKey, {
+        algorithms: ['RS256'],
+      });
     } catch (err) {
-      throw new BadRequestException(`Ошибка проверки вебхука: ${err.message}`);
+      throw new BadRequestException(
+        `Ошибка проверки вебхука: ${err.message}`,
+      );
     }
 
     const { event, data } = decoded;
@@ -162,7 +220,12 @@ export class PaymentsService {
     if (event === 'acquiringInternetPayment') {
       const payment = await this.paymentRepository.findOne({
         where: { transactionId: data.operationId },
-        relations: ['purchase', 'purchase.user', 'purchase.course', 'purchase.category'],
+        relations: [
+          'purchase',
+          'purchase.user',
+          'purchase.course',
+          'purchase.category',
+        ],
       });
       if (!payment) {
         throw new NotFoundException('Платёж не найден');
@@ -177,15 +240,21 @@ export class PaymentsService {
         await this.paymentRepository.save(payment);
         await this.purchasesService.confirmPurchase(payment.purchaseId);
         return { status: 'OK' };
-      } else if (['REFUNDED', 'EXPIRED', 'REFUNDED_PARTIALLY'].includes(data.status)) {
+      } else if (
+        ['REFUNDED', 'EXPIRED', 'REFUNDED_PARTIALLY'].includes(data.status)
+      ) {
         payment.status = 'failed';
         await this.paymentRepository.save(payment);
         return { status: 'OK' };
       } else {
-        throw new BadRequestException(`Неизвестный статус: ${data.status}`);
+        throw new BadRequestException(
+          `Неизвестный статус: ${data.status}`,
+        );
       }
     }
 
-    throw new BadRequestException(`Неизвестный тип события: ${event}`);
+    throw new BadRequestException(
+      `Неизвестный тип события: ${event}`,
+    );
   }
 }
