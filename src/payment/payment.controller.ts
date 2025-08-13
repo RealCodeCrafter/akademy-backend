@@ -37,23 +37,17 @@ export class PaymentsController {
     this.logger.log(`To'lov boshlash: userId=${userId}`);
     return this.paymentsService.startPayment(createPaymentDto, userId);
   }
-
-  @All('webhook')
+@All('webhook')
 @HttpCode(200)
 async handleWebhook(@Req() req: Request) {
   try {
-    // Raw text body faqat POST bo'lsa olinadi
-    const rawBody =
-      req.method === 'POST' && typeof req.body === 'string'
-        ? req.body
-        : undefined;
+    const rawBody = req.body?.toString('utf8'); // Buffer => string
 
     this.logger.debug(`Webhook headers: ${JSON.stringify(req.headers)}`);
     this.logger.debug(`Webhook raw body: ${rawBody}`);
-    this.logger.debug(`Webhook body type: ${typeof rawBody}`);
 
     if (!rawBody) {
-      this.logger.warn('Webhook monitoring yoki bo‘sh request keldi');
+      this.logger.warn('Webhook bo‘sh yoki noto‘g‘ri keldi');
       return { ok: true };
     }
 
@@ -64,5 +58,6 @@ async handleWebhook(@Req() req: Request) {
     return { ok: true };
   }
 }
+
 
 }
