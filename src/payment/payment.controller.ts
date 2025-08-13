@@ -1,16 +1,4 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Req,
-  UseGuards,
-  UnauthorizedException,
-  Logger,
-  All,
-  HttpCode,
-  Get,
-  Param,
-} from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards, HttpCode, All, Get, Param } from '@nestjs/common';
 import { PaymentsService } from './payment.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { AuthGuard } from '../auth/auth.guard';
@@ -22,48 +10,25 @@ interface AuthenticatedRequest extends Request {
 
 @Controller('payments')
 export class PaymentsController {
-  private readonly logger = new Logger(PaymentsController.name);
-
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @UseGuards(AuthGuard)
   @Post('start')
-  async startPayment(
-    @Body() createPaymentDto: CreatePaymentDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
+  async startPayment(@Body() createPaymentDto: CreatePaymentDto, @Req() req: AuthenticatedRequest) {
     const userId = req.user?.sub;
-    if (!userId) {
-      throw new UnauthorizedException('Foydalanuvchi aniqlanmadi');
-    }
-    this.logger.log(`To'lov boshlash: userId=${userId}`);
+    if (!userId) throw new Error('Foydalanuvchi aniqlanmadi');
     return this.paymentsService.startPayment(createPaymentDto, userId);
   }
 
   @All('webhook')
   @HttpCode(200)
   async handleWebhook(@Req() req: Request) {
-    try {
-      const contentType = req.get('Content-Type') || 'undefined';
-      const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-      this.logger.debug(`Webhook raw body: ${rawBody}, Content-Type: ${contentType}`);
+    const contentType = req.get('Content-Type') || 'application/json';
+    const rawBody = req.body;
 
-      if (!rawBody) {
-        this.logger.warn('Webhook bo‘sh keldi');
-        return { ok: true };
-      }
+    if (!rawBody) return { ok: true, error: 'Webhook tanasi bo‘sh' };
 
-      if (contentType !== 'text/plain' && contentType !== 'application/jwt') {
-        this.logger.warn(`Noto‘g‘ri Content-Type: ${contentType}`);
-        return { ok: true, error: 'Invalid Content-Type, expected text/plain or application/jwt' };
-      }
-
-      await this.paymentsService.handleCallback(rawBody);
-      return { ok: true };
-    } catch (err) {
-      this.logger.error(`Webhook xato: ${err.message}`, err.stack);
-      return { ok: true, error: err.message };
-    }
+    return this.paymentsService.handleCallback(rawBody, contentType);
   }
 
   @Get('status/:requestId')

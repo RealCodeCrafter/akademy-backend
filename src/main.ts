@@ -1,4 +1,3 @@
-// main.ts
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -7,9 +6,11 @@ import * as bodyParser from 'body-parser';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.use(bodyParser.text({ type: ['text/plain', 'application/jwt'] }));
-  app.use(bodyParser.json());
+  // JSON va JWT uchun body parser
+  app.use(bodyParser.json({ type: ['application/json', 'application/jwt'] }));
+  app.use(bodyParser.text({ type: 'text/plain' }));
 
+  // Global validatsiya
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -18,6 +19,7 @@ async function bootstrap() {
     }),
   );
 
+  // CORS sozlamalari
   app.enableCors({
     origin: '*',
     credentials: true,
