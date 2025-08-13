@@ -39,7 +39,7 @@ export class PaymentsService {
     const category = await this.categoryService.findOne(createPaymentDto.categoryId);
     if (!category) throw new NotFoundException('Kategoriya topilmadi');
 
-    if (!course.categories?.some(cat => cat.id === category.id)) {
+    if (!course.categories?.some((cat) => cat.id === category.id)) {
       throw new BadRequestException('Kategoriya ushbu kursga tegishli emas');
     }
 
@@ -53,22 +53,22 @@ export class PaymentsService {
         createPaymentDto.levelId,
       );
       if (!isLinked) {
-        throw new BadRequestException('Daraja ushbu kategoriya bilan bog‘liq emas');
+        throw new BadRequestException('Daraja ushbu kategoriya uchun emas');
       }
       degree = level.name;
     }
 
+    // Purchase yozish
     const purchase = await this.purchasesService.create(createPaymentDto, userId);
-    if (!purchase?.id) {
-      throw new BadRequestException('Purchase ID noto‘g‘ri');
-    }
+    if (!purchase?.id) throw new BadRequestException('Purchase ID noto‘g‘ri');
 
+    const transactionId = `txn_${Date.now()}`;
     const payment = this.paymentRepository.create({
-      amount: Number(category.price),
-      transactionId: `txn_${Date.now()}`,
+      amount: Number(Number(category.price).toFixed(2)),
+      transactionId,
       status: 'pending',
       user,
-      purchaseId: Number(purchase.id),
+      purchaseId: purchase.id,
       purchase,
     });
     const savedPayment = await this.paymentRepository.save(payment);
@@ -76,21 +76,22 @@ export class PaymentsService {
     const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
     const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID');
     const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
-
     if (!token || !merchantId || !customerCode) {
       throw new BadRequestException('Tochka konfiguratsiyasi to‘liq emas');
     }
 
     try {
       const response = await axios.post(
-        `https://enter.tochka.com/uapi/acquiring/v1.0/payments`,
+        'https://enter.tochka.com/uapi/acquiring/v1.0/payments',
         {
           Data: {
             customerCode,
-            amount: Number(category.price),
+            amount: Number(Number(category.price).toFixed(2)),
             purpose: `Kurs: ${course.name}, Kategoriya: ${category.name}, Daraja: ${degree}`,
             paymentMode: ['card'],
+            saveCard: false,
             merchantId,
+            preAuthorization: false,
             ttl: 10080,
             sourceName: 'A+ Academy',
           },
@@ -103,12 +104,7 @@ export class PaymentsService {
         },
       );
 
-      const paymentLink = response.data?.Data?.paymentLink;
-      const operationId = response.data?.Data?.operationId;
-      if (!paymentLink || !operationId) {
-        throw new Error('Tochka javobida paymentLink yoki operationId yo‘q');
-      }
-
+      const { paymentLink, operationId } = response.data.Data;
       savedPayment.transactionId = operationId;
       await this.paymentRepository.save(savedPayment);
 
@@ -120,56 +116,43 @@ export class PaymentsService {
       };
     } catch (err) {
       throw new BadRequestException(
-        `Tochka API xato: ${err.response?.data?.error || err.message}`,
+        `Tochka API xatosi: ${err.response?.data || err.message}`,
       );
     }
   }
 
   async handleCallback(callbackData: string) {
-  if (typeof callbackData !== 'string') {
-    throw new BadRequestException('Webhook body string bo‘lishi kerak');
+    const publicKey = this.configService
+      .get<string>('TOCHKA_PUBLIC_KEY')
+      ?.replace(/\\n/g, '\n');
+    if (!publicKey) throw new BadRequestException('Tochka public key topilmadi');
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(callbackData, publicKey, { algorithms: ['RS256'] });
+    } catch (err) {
+      throw new BadRequestException('Webhook imzosi noto‘g‘ri');
+    }
+
+    const { event, data } = decoded;
+    if (event === 'acquiringInternetPayment') {
+      const payment = await this.paymentRepository.findOne({
+        where: { transactionId: data.operationId },
+        relations: ['purchase'],
+      });
+      if (!payment) throw new NotFoundException('To‘lov topilmadi');
+
+      if (data.status === 'APPROVED') {
+        payment.status = 'completed';
+        await this.paymentRepository.save(payment);
+        await this.purchasesService.confirmPurchase(payment.purchaseId); // kurs ulanishi shu yerda
+      } else if (['REFUNDED', 'EXPIRED', 'REFUNDED_PARTIALLY'].includes(data.status)) {
+        payment.status = 'failed';
+        await this.paymentRepository.save(payment);
+      }
+      return { status: 'OK' };
+    }
+
+    throw new BadRequestException(`Noma’lum event turi: ${event}`);
   }
-
-  // 🔹 Old va oxiridagi bo‘sh joy / yangi qatordan tozalash
-  callbackData = callbackData.trim();
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(callbackData);
-  } catch {
-    throw new BadRequestException('Webhook JSON format xato');
-  }
-
-  // 🔹 Test rejimi uchun "decoded" ni qo‘lda yasash
-  const decoded = {
-    event: 'acquiringInternetPayment',
-    data: {
-      operationId: parsed.callbackData.paymentId,
-      status: parsed.callbackData.status === 'success' ? 'APPROVED' : 'FAILED',
-    },
-  };
-
-  const { event, data } = decoded;
-  if (event !== 'acquiringInternetPayment') {
-    throw new BadRequestException(`Noma’lum event: ${event}`);
-  }
-
-  const payment = await this.paymentRepository.findOne({
-    where: { transactionId: data.operationId },
-    relations: ['purchase'],
-  });
-  if (!payment) throw new NotFoundException('To‘lov topilmadi');
-
-  if (data.status === 'APPROVED') {
-    payment.status = 'completed';
-    await this.paymentRepository.save(payment);
-    await this.purchasesService.confirmPurchase(Number(payment.purchaseId));
-  } else if (['REFUNDED', 'EXPIRED', 'FAILED'].includes(data.status)) {
-    payment.status = 'failed';
-    await this.paymentRepository.save(payment);
-  }
-
-  return { status: 'OK' };
-}
-
 }

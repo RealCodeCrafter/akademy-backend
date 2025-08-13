@@ -37,38 +37,27 @@ export class PaymentsController {
     }
 
     this.logger.log(`To'lov boshlash: userId=${userId}`);
-    return await this.paymentsService.startPayment(createPaymentDto, userId);
+    return this.paymentsService.startPayment(createPaymentDto, userId);
   }
 
   @All('webhook')
-@HttpCode(200)
-async handleWebhook(@Req() req: Request) {
-  try {
-    this.logger.debug(`Webhook headers: ${JSON.stringify(req.headers)}`);
-    this.logger.debug(`Webhook raw body: ${JSON.stringify(req.body)}`);
+  @HttpCode(200)
+  async handleWebhook(@Req() req: Request) {
+    try {
+      this.logger.debug(`Webhook headers: ${JSON.stringify(req.headers)}`);
+      this.logger.debug(`Webhook raw body: ${req.body}`);
+      this.logger.debug(`Webhook body type: ${typeof req.body}`);
 
-    let rawBody: string;
+      if (!req.body || typeof req.body !== 'string') {
+        this.logger.warn('Webhook bo‘sh keldi yoki string emas');
+        return { ok: true };
+      }
 
-    // Agar body string bo‘lsa — to‘g‘ridan-to‘g‘ri olamiz
-    if (typeof req.body === 'string') {
-      rawBody = req.body;
-    } 
-    // Agar body JSON bo‘lsa — stringga aylantiramiz
-    else if (typeof req.body === 'object' && req.body !== null) {
-      rawBody = JSON.stringify(req.body);
-    } 
-    else {
-      this.logger.warn('Webhook bo‘sh keldi yoki noto‘g‘ri format');
+      await this.paymentsService.handleCallback(req.body);
+      return { ok: true };
+    } catch (err) {
+      this.logger.error(`Webhook xato: ${err.message}`, err.stack);
       return { ok: true };
     }
-
-    await this.paymentsService.handleCallback(rawBody);
-    return { ok: true };
-  } catch (err) {
-    this.logger.error(`Webhook xato: ${err.message}`, err.stack);
-    return { ok: true };
   }
-}
-
-
 }
