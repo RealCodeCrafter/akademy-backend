@@ -127,18 +127,23 @@ export class PaymentsService {
       ?.replace(/\\n/g, '\n');
 
     if (!publicKey) {
+      console.error('[PaymentsService] Tochka public key topilmadi');
       throw new BadRequestException('Tochka public key topilmadi');
+    }
+
+    if (!rawBody) {
+      console.error('[PaymentsService] Webhook body bo‘sh');
+      throw new BadRequestException('Webhook body bo‘sh');
     }
 
     let decoded: any;
     try {
       decoded = jwt.verify(rawBody, publicKey, { algorithms: ['RS256'] });
+      console.log('[PaymentsService] Webhook decoded payload:', JSON.stringify(decoded, null, 2));
     } catch (err) {
       console.error('[PaymentsService] Webhook imzo xatosi:', err.message);
       throw new BadRequestException('Webhook imzosi noto‘g‘ri yoki buzilgan');
     }
-
-    console.log('[PaymentsService] Webhook decoded payload:', decoded);
 
     if (decoded.webhookType !== 'acquiringInternetPayment') {
       console.warn(`[PaymentsService] Noma’lum webhook turi: ${decoded.webhookType}`);
@@ -163,10 +168,10 @@ export class PaymentsService {
         console.log(`[PaymentsService] To‘lov tasdiqlandi: ${payment.id}`);
         break;
 
+      case 'DECLINED':
       case 'REFUNDED':
       case 'EXPIRED':
       case 'REFUNDED_PARTIALLY':
-      case 'DECLINED':
         payment.status = 'failed';
         await this.paymentRepository.save(payment);
         console.log(`[PaymentsService] To‘lov muvaffaqiyatsiz: ${payment.id} (status=${decoded.status})`);
