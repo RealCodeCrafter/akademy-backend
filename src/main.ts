@@ -7,7 +7,7 @@ import * as bodyParser from 'body-parser';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.use(bodyParser.text({ type: 'text/plain' }));
+  app.use(bodyParser.text({ type: ['text/plain', 'application/jwt'] }));
   app.use(bodyParser.json());
 
   app.useGlobalPipes(

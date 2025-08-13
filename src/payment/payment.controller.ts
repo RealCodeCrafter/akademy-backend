@@ -46,7 +46,7 @@ export class PaymentsController {
   async handleWebhook(@Req() req: Request) {
     try {
       const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-      this.logger.debug(`Webhook raw body: ${rawBody}, Content-Type: ${req.get('Content-Type')}`);
+      this.logger.debug(`Webhook raw body: ${rawBody}, Content-Type: ${req.get('Content-Type') || 'undefined'}`);
 
       if (!rawBody) {
         this.logger.warn('Webhook bo‘sh keldi');

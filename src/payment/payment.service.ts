@@ -205,9 +205,9 @@ export class PaymentsService {
       console.log(`[PaymentsService] Payment status response: ${JSON.stringify(response.data, null, 2)}`);
       return response.data.Data;
     } catch (err) {
-      console.error(`[PaymentsService] Payment status xatosi: ${err.response?.data || err.message}`);
+      console.error(`[PaymentsService] Payment status xatosi: ${JSON.stringify(err.response?.data || err.message, null, 2)}`);
       throw new BadRequestException(
-        `Payment status xatosi: ${err.response?.data || err.message}`,
+        `Payment status xatosi: ${JSON.stringify(err.response?.data || err.message)}`,
       );
     }
   }
