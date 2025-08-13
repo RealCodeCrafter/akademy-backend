@@ -27,7 +27,8 @@ export class PaymentsService {
     private levelService: LevelService,
     private configService: ConfigService,
   ) {}
-async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
+
+  async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
   const user = await this.usersService.findOne(userId);
   if (!user) throw new NotFoundException('Пользователь не найден');
 
@@ -58,22 +59,26 @@ async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
 
   // Purchase yozish
   const purchase = await this.purchasesService.create(createPaymentDto, userId);
+  if (!purchase?.id || isNaN(Number(purchase.id))) {
+    throw new BadRequestException('Purchase ID noto‘g‘ri');
+  }
 
   const transactionId = `txn_${Date.now()}`;
   const payment = this.paymentRepository.create({
-    amount: category.price,
+    amount: Number(category.price),
     transactionId,
     status: 'pending',
     user,
-    purchaseId: purchase.id,
+    purchaseId: Number(purchase.id),
     purchase,
   });
   const savedPayment = await this.paymentRepository.save(payment);
 
   const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
   const merchantId = this.configService.get<string>('TOCHKA_MERCHANT_ID');
+  const customerCode = this.configService.get<string>('TOCHKA_CUSTOMER_CODE');
 
-  if (!token || !merchantId) {
+  if (!token || !merchantId || !customerCode) {
     throw new BadRequestException('Конфигурация Tochka неполная');
   }
 
@@ -82,8 +87,8 @@ async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
       `https://enter.tochka.com/uapi/acquiring/v1.0/payments`,
       {
         Data: {
-          customerCode: this.configService.get<string>('TOCHKA_CUSTOMER_CODE'),
-          amount: Number(category.price.toFixed(2)), // API son kutadi
+          customerCode,
+          amount: Number(category.price.toFixed(2)),
           purpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
           paymentMode: ['card'],
           saveCard: false,
@@ -122,7 +127,7 @@ async handleCallback(callbackData: string) {
     throw new BadRequestException('callbackData не предоставлен');
   }
 
-const publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY')?.replace(/\\n/g, '\n');
+  const publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY')?.replace(/\\n/g, '\n');
   if (!publicKey) {
     throw new BadRequestException('Публичный ключ Tochka не найден');
   }
@@ -143,12 +148,16 @@ const publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY')?.replace(/
       where: { transactionId: data.operationId },
       relations: ['purchase'],
     });
+
     if (!payment) throw new NotFoundException('Платеж не найден');
+    if (!payment.purchaseId || isNaN(Number(payment.purchaseId))) {
+      throw new BadRequestException('Purchase ID callback’da noto‘g‘ri');
+    }
 
     if (data.status === 'APPROVED') {
       payment.status = 'completed';
       await this.paymentRepository.save(payment);
-      await this.purchasesService.confirmPurchase(payment.purchaseId);
+      await this.purchasesService.confirmPurchase(Number(payment.purchaseId));
     } else if (['REFUNDED', 'EXPIRED', 'REFUNDED_PARTIALLY'].includes(data.status)) {
       payment.status = 'failed';
       await this.paymentRepository.save(payment);
