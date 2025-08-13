@@ -91,23 +91,32 @@ export class LevelService {
   }
 
   return this.levelRepository.save(level);
-}
+ }
 
 
-async delete(id: number) {
-  const level = await this.findOne(id);
 
-  // 1. Bog‘lanishlarni qo‘lda tozalash
+ async delete(id: number) {
+  const level = await this.levelRepository.findOne({
+    where: { id },
+    relations: ['categories'], // bog‘lanishlarni ham olish
+  });
+
+  if (!level) {
+    throw new NotFoundException(`Level ID ${id} topilmadi`);
+  }
+
+  // Bog‘lanishlarni join table’dan o‘chirish
   await this.levelRepository
     .createQueryBuilder()
-    .relation('categories') // entity ichidagi relation nomi
+    .relation(Level, 'categories') // entity va relation nomi
     .of(level)
-    .remove(await level.categories);
+    .remove(level.categories);
 
-  // 2. Keyin Level’ni o‘chirish
+  // Level’ni o‘chirish
   await this.levelRepository.delete(id);
 
-  return { message: `Daraja ID ${id} o'chirildi` };
+  return { message: `Level ID ${id} o'chirildi` };
 }
 
-}
+
+  }
