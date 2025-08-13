@@ -72,72 +72,100 @@ export class PaymentsService {
       throw new BadRequestException('Tochka konfiguratsiyasi to‘liq emas');
     }
 
-    const response = await axios.post(
-      'https://enter.tochka.com/uapi/acquiring/v1.0/payments',
-      {
-        Data: {
-          customerCode,
-          amount: Number(category.price.toFixed(2)),
-          purpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
-          paymentMode: ['card'],
-          saveCard: false,
-          merchantId,
-          preAuthorization: false,
-          ttl: 10080,
-          sourceName: 'A+ Academy',
+    try {
+      const response = await axios.post(
+        'https://enter.tochka.com/uapi/acquiring/v1.0/payments',
+        {
+          Data: {
+            customerCode,
+            amount: Number(category.price.toFixed(2)),
+            purpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
+            paymentMode: ['card'],
+            saveCard: false,
+            merchantId,
+            preAuthorization: false,
+            ttl: 10080,
+            sourceName: 'A+ Academy',
+          },
         },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
         },
-      },
-    );
+      );
 
-    const { paymentLink, operationId } = response.data.Data;
-    savedPayment.transactionId = operationId;
-    await this.paymentRepository.save(savedPayment);
+      const { paymentLink, operationId } = response.data.Data;
+      savedPayment.transactionId = operationId;
+      await this.paymentRepository.save(savedPayment);
+      console.log(`Payment saved with operationId: ${operationId}`);
 
-    return {
-      paymentUrl: paymentLink,
-      paymentId: savedPayment.id,
-      purchaseId: purchase.id,
-      transactionId: operationId,
-    };
+      return {
+        paymentUrl: paymentLink,
+        paymentId: savedPayment.id,
+        purchaseId: purchase.id,
+        transactionId: operationId,
+      };
+    } catch (err) {
+      console.error(`Tochka API xatosi: ${err.response?.data?.message || err.message}`);
+      throw new BadRequestException(`Tochka API xatosi: ${err.response?.data?.message || err.message}`);
+    }
   }
 
   async handleCallback(rawBody: any, contentType: string) {
+    console.log('Handling webhook:', { rawBody, contentType }); // Qo‘shimcha log
     const publicKey = this.configService.get<string>('TOCHKA_PUBLIC_KEY')?.replace(/\\n/g, '\n');
-    if (!publicKey) throw new BadRequestException('Tochka public key topilmadi');
+    if (!publicKey) {
+      console.error('Tochka public key topilmadi');
+      throw new BadRequestException('Tochka public key topilmadi');
+    }
 
     let decoded: any;
-    if (contentType.includes('application/jwt') || contentType.includes('text/plain')) {
-      decoded = jwt.verify(rawBody, publicKey, { algorithms: ['RS256'] });
+    if (contentType.includes('application/jwt')) {
+      try {
+        decoded = jwt.verify(rawBody, publicKey, { algorithms: ['RS256'] });
+        console.log('Webhook JWT decoded:', decoded);
+      } catch (err) {
+        console.error('Webhook JWT xatosi:', err.message);
+        throw new BadRequestException('Webhook imzosi noto‘g‘ri');
+      }
     } else if (contentType.includes('application/json')) {
       decoded = typeof rawBody === 'string' ? JSON.parse(rawBody) : rawBody;
+      console.log('Webhook JSON decoded:', decoded);
     } else {
+      console.warn(`Noto‘g‘ri Content-Type: ${contentType}`);
       return { ok: true, error: 'Noto‘g‘ri Content-Type' };
     }
 
     const operationId = decoded.operationId || decoded.Data?.operationId;
-    if (!operationId) throw new BadRequestException('operationId topilmadi');
+    if (!operationId) {
+      console.error('operationId topilmadi:', decoded);
+      throw new BadRequestException('operationId topilmadi');
+    }
 
     const payment = await this.paymentRepository.findOne({
       where: { transactionId: operationId },
       relations: ['purchase'],
     });
 
-    if (!payment) throw new BadRequestException(`Payment topilmadi: ${operationId}`);
+    if (!payment) {
+      console.error(`Payment topilmadi: ${operationId}`);
+      throw new BadRequestException(`Payment topilmadi: ${operationId}`);
+    }
 
     const status = decoded.status || decoded.Data?.status;
-    if (!status) throw new BadRequestException('To‘lov statusi topilmadi');
+    if (!status) {
+      console.error('To‘lov statusi topilmadi:', decoded);
+      throw new BadRequestException('To‘lov statusi topilmadi');
+    }
 
     switch (status) {
       case 'APPROVED':
         payment.status = 'completed';
         await this.paymentRepository.save(payment);
         await this.purchasesService.confirmPurchase(payment.purchaseId);
+        console.log(`To‘lov tasdiqlandi: ${payment.id}`);
         break;
       case 'DECLINED':
       case 'REFUNDED':
@@ -145,8 +173,10 @@ export class PaymentsService {
       case 'REFUNDED_PARTIALLY':
         payment.status = 'failed';
         await this.paymentRepository.save(payment);
+        console.log(`To‘lov muvaffaqiyatsiz: ${payment.id} (status=${status})`);
         break;
       default:
+        console.warn(`Noma’lum to‘lov statusi: ${status}`);
         return { ok: true, error: `Noma’lum to‘lov statusi: ${status}` };
     }
 
@@ -157,15 +187,20 @@ export class PaymentsService {
     const token = this.configService.get<string>('TOCHKA_JWT_TOKEN');
     if (!token) throw new BadRequestException('Tochka JWT token topilmadi');
 
-    const response = await axios.get(
-      `https://enter.tochka.com/uapi/acquiring/v1.0/payments/${requestId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
+    try {
+      const response = await axios.get(
+        `https://enter.tochka.com/uapi/acquiring/v1.0/payments/${requestId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      },
-    );
-
-    return response.data.Data;
+      );
+      console.log(`Payment status response for requestId=${requestId}:`, response.data);
+      return response.data.Data;
+    } catch (err) {
+      console.error(`Payment status xatosi for requestId=${requestId}:`, err.response?.data || err.message);
+      throw new BadRequestException(`Payment status xatosi: ${err.response?.data?.message || err.message}`);
+    }
   }
 }
