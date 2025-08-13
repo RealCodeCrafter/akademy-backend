@@ -43,7 +43,6 @@ export class PaymentsController {
 @HttpCode(200)
 async handleWebhook(@Req() req: Request) {
   try {
-    // To‘liq log
     this.logger.debug(`Webhook headers: ${JSON.stringify(req.headers)}`);
     this.logger.debug(`Webhook raw body: ${JSON.stringify(req.body)}`);
     this.logger.debug(`Webhook body type: ${typeof req.body}`);

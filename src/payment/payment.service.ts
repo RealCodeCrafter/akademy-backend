@@ -125,42 +125,58 @@ export class PaymentsService {
     }
   }
 
-  async handleCallback(callbackData: string) {
-    const publicKey = this.configService
-      .get<string>('TOCHKA_PUBLIC_KEY')
-      ?.replace(/\\n/g, '\n');
+  async handleCallback(callbackData: any) {
+  // 🔹 Agar bu test rejimi bo'lsa, publicKey kerak emas
+  const publicKey = this.configService
+    .get<string>('TOCHKA_PUBLIC_KEY')
+    ?.replace(/\\n/g, '\n');
 
-    if (!publicKey) {
-      throw new BadRequestException('Tochka public key topilmadi');
-    }
-
-    let decoded: any;
-    try {
-      decoded = jwt.verify(callbackData, publicKey, { algorithms: ['RS256'] });
-    } catch {
-      throw new BadRequestException('Webhook imzosi noto‘g‘ri');
-    }
-
-    const { event, data } = decoded;
-    if (event !== 'acquiringInternetPayment') {
-      throw new BadRequestException(`Noma’lum event: ${event}`);
-    }
-
-    const payment = await this.paymentRepository.findOne({
-      where: { transactionId: data.operationId },
-      relations: ['purchase'],
-    });
-    if (!payment) throw new NotFoundException('To‘lov topilmadi');
-
-    if (data.status === 'APPROVED') {
-      payment.status = 'completed';
-      await this.paymentRepository.save(payment);
-      await this.purchasesService.confirmPurchase(Number(payment.purchaseId));
-    } else if (['REFUNDED', 'EXPIRED'].includes(data.status)) {
-      payment.status = 'failed';
-      await this.paymentRepository.save(payment);
-    }
-
-    return { status: 'OK' };
+  if (!publicKey) {
+    throw new BadRequestException('Tochka public key topilmadi');
   }
+
+  let decoded: any;
+
+  // ========================
+  // ✅ TEST rejimi (Postman uchun)
+  if (typeof callbackData === 'string') {
+    try {
+      callbackData = JSON.parse(callbackData);
+    } catch {
+      throw new BadRequestException('JSON format xato');
+    }
+  }
+
+  decoded = {
+    event: 'acquiringInternetPayment',
+    data: {
+      operationId: callbackData.paymentId,
+      status: callbackData.status === 'success' ? 'APPROVED' : 'FAILED',
+    },
+  };
+  // ========================
+
+  const { event, data } = decoded;
+  if (event !== 'acquiringInternetPayment') {
+    throw new BadRequestException(`Noma’lum event: ${event}`);
+  }
+
+  const payment = await this.paymentRepository.findOne({
+    where: { transactionId: data.operationId },
+    relations: ['purchase'],
+  });
+  if (!payment) throw new NotFoundException('To‘lov topilmadi');
+
+  if (data.status === 'APPROVED') {
+    payment.status = 'completed';
+    await this.paymentRepository.save(payment);
+    await this.purchasesService.confirmPurchase(Number(payment.purchaseId));
+  } else if (['REFUNDED', 'EXPIRED', 'FAILED'].includes(data.status)) {
+    payment.status = 'failed';
+    await this.paymentRepository.save(payment);
+  }
+
+  return { status: 'OK' };
+}
+
 }

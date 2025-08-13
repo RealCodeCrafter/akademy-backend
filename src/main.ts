@@ -6,6 +6,7 @@ import * as express from 'express';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+   app.use('/payments/webhook', express.text({ type: '*/*' }));
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -18,8 +19,6 @@ async function bootstrap() {
     origin: '*',
     credentials: true,
   });
-
-  app.use('/payments/webhook', express.text({ type: '*/*' }));
 
   await app.listen(7000, '0.0.0.0');
 }
