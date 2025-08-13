@@ -120,39 +120,65 @@ export class PaymentsService {
       );
     }
   }
+async handleCallback(rawBody: string) {
+  const publicKey = this.configService
+    .get<string>('TOCHKA_PUBLIC_KEY')
+    ?.replace(/\\n/g, '\n');
 
-  async handleCallback(callbackData: string) {
-    const publicKey = this.configService
-      .get<string>('TOCHKA_PUBLIC_KEY')
-      ?.replace(/\\n/g, '\n');
-    if (!publicKey) throw new BadRequestException('Tochka public key topilmadi');
-
-    let decoded: any;
-    try {
-      decoded = jwt.verify(callbackData, publicKey, { algorithms: ['RS256'] });
-    } catch (err) {
-      throw new BadRequestException('Webhook imzosi noto‘g‘ri');
-    }
-
-    const { event, data } = decoded;
-    if (event === 'acquiringInternetPayment') {
-      const payment = await this.paymentRepository.findOne({
-        where: { transactionId: data.operationId },
-        relations: ['purchase'],
-      });
-      if (!payment) throw new NotFoundException('To‘lov topilmadi');
-
-      if (data.status === 'APPROVED') {
-        payment.status = 'completed';
-        await this.paymentRepository.save(payment);
-        await this.purchasesService.confirmPurchase(payment.purchaseId);
-      } else if (['REFUNDED', 'EXPIRED', 'REFUNDED_PARTIALLY'].includes(data.status)) {
-        payment.status = 'failed';
-        await this.paymentRepository.save(payment);
-      }
-      return { status: 'OK' };
-    }
-
-    throw new BadRequestException(`Noma’lum event turi: ${event}`);
+  if (!publicKey) {
+    throw new BadRequestException('Tochka public key topilmadi');
   }
+
+  let decoded: any;
+  try {
+    decoded = jwt.verify(rawBody, publicKey, { algorithms: ['RS256'] });
+  } catch (err) {
+    console.error('[PaymentsService] Webhook imzo xatosi:', err.message);
+    throw new BadRequestException('Webhook imzosi noto‘g‘ri yoki buzilgan');
+  }
+
+  console.log('[PaymentsService] Webhook decoded payload:', decoded);
+
+  const { event, data } = decoded;
+
+  if (event !== 'acquiringInternetPayment') {
+    console.warn(`[PaymentsService] Noma’lum event turi: ${event}`);
+    return { status: 'IGNORED', reason: 'Unknown event type' };
+  }
+
+  const payment = await this.paymentRepository.findOne({
+    where: { transactionId: data.operationId },
+    relations: ['purchase'],
+  });
+
+  if (!payment) {
+    console.error(`[PaymentsService] Payment topilmadi: operationId=${data.operationId}`);
+    return { status: 'ERROR', reason: 'Payment not found' };
+  }
+
+  switch (data.status) {
+    case 'APPROVED':
+      payment.status = 'completed';
+      await this.paymentRepository.save(payment);
+      await this.purchasesService.confirmPurchase(payment.purchaseId);
+      console.log(`[PaymentsService] To‘lov tasdiqlandi: ${payment.id}`);
+      break;
+
+    case 'REFUNDED':
+    case 'EXPIRED':
+    case 'REFUNDED_PARTIALLY':
+    case 'DECLINED':
+      payment.status = 'failed';
+      await this.paymentRepository.save(payment);
+      console.log(`[PaymentsService] To‘lov muvaffaqiyatsiz: ${payment.id} (status=${data.status})`);
+      break;
+
+    default:
+      console.warn(`[PaymentsService] Noma’lum to‘lov statusi: ${data.status}`);
+      break;
+  }
+
+  return { status: 'OK' };
+}
+
 }
