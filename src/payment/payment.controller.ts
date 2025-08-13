@@ -54,27 +54,28 @@ export class PaymentsController {
       throw err;
     }
   }
+@Post('webhook')
+async handleWebhook(@Body('callbackData') callbackData: string) {
+  this.logger.log(`Webhook so'rovi keldi: ${callbackData}`);
 
-  @Post('webhook')
-  async handleWebhook(@Body('callbackData') callbackData: string) {
-    this.logger.log(`Webhook so'rovi keldi: ${callbackData}`);
-
-    if (!callbackData) {
-      this.logger.error('callbackData parametri taqdim etilmadi');
-      throw new BadRequestException('callbackData parametri taqdim etilmadi');
-    }
-
-    try {
-      const result = await this.paymentsService.handleCallback(callbackData);
-      this.logger.log(
-        `Webhook muvaffaqiyatli qayta ishlendi: result=${JSON.stringify(
-          result,
-        )}`,
-      );
-      return result;
-    } catch (err) {
-      this.logger.error(`Webhook qayta ishlashda xato: ${err.message}`);
-      throw err;
-    }
+  // Agar callbackData yo'q bo'lsa — bu test request bo'lishi mumkin
+  if (!callbackData) {
+    this.logger.warn('callbackData parametri yo‘q — ehtimol bu test so‘rov');
+    return { ok: true }; // 200 OK qaytariladi
   }
+
+  // Real payment callback ishlov
+  try {
+    const result = await this.paymentsService.handleCallback(callbackData);
+    this.logger.log(
+      `Webhook muvaffaqiyatli qayta ishlendi: result=${JSON.stringify(result)}`
+    );
+    return result;
+  } catch (err) {
+    this.logger.error(`Webhook qayta ishlashda xato: ${err.message}`);
+    // Hatto xato bo‘lsa ham 200 qaytarish — webhook retry’larni oldini olish uchun
+    return { error: true };
+  }
+}
+
 }
