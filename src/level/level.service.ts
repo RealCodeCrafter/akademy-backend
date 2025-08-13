@@ -94,10 +94,20 @@ export class LevelService {
 }
 
 
+async delete(id: number) {
+  const level = await this.findOne(id);
 
-  async delete(id: number) {
-    const level = await this.findOne(id);
-    await this.levelRepository.delete(id);
-    return { message: `Daraja ID ${id} o'chirildi` };
-  }
+  // 1. Bog‘lanishlarni qo‘lda tozalash
+  await this.levelRepository
+    .createQueryBuilder()
+    .relation('categories') // entity ichidagi relation nomi
+    .of(level)
+    .remove(await level.categories);
+
+  // 2. Keyin Level’ni o‘chirish
+  await this.levelRepository.delete(id);
+
+  return { message: `Daraja ID ${id} o'chirildi` };
+}
+
 }
