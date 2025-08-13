@@ -58,7 +58,7 @@ async handleWebhook(@Req() req: Request) {
     return { ok: true };
   } catch (err) {
     this.logger.error(`Webhook xato: ${err.message}`, err.stack);
-    return { ok: true }; // bank qayta yuborishi uchun
+    return { ok: true };
   }
 }
 
