@@ -6,11 +6,9 @@ import * as bodyParser from 'body-parser';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // JSON va JWT uchun body parser
   app.use(bodyParser.json({ type: ['application/json', 'application/jwt'] }));
   app.use(bodyParser.text({ type: 'text/plain' }));
 
-  // Global validatsiya
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -19,7 +17,6 @@ async function bootstrap() {
     }),
   );
 
-  // CORS sozlamalari
   app.enableCors({
     origin: '*',
     credentials: true,

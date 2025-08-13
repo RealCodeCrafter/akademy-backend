@@ -25,8 +25,12 @@ export class PaymentsController {
   async handleWebhook(@Req() req: Request) {
     const contentType = req.get('Content-Type') || 'application/json';
     const rawBody = req.body;
+    console.log('Webhook received:', { rawBody, contentType, headers: req.headers }); // Qo‘shimcha log
 
-    if (!rawBody) return { ok: true, error: 'Webhook tanasi bo‘sh' };
+    if (!rawBody) {
+      console.warn('Webhook tanasi bo‘sh');
+      return { ok: true, error: 'Webhook tanasi bo‘sh' };
+    }
 
     return this.paymentsService.handleCallback(rawBody, contentType);
   }
