@@ -32,10 +32,8 @@ export class PaymentsController {
   ) {
     const userId = req.user?.sub;
     if (!userId) {
-      this.logger.error('Foydalanuvchi aniqlanmadi');
       throw new UnauthorizedException('Foydalanuvchi aniqlanmadi');
     }
-
     this.logger.log(`To'lov boshlash: userId=${userId}`);
     return this.paymentsService.startPayment(createPaymentDto, userId);
   }
@@ -43,23 +41,24 @@ export class PaymentsController {
   @All('webhook')
   @HttpCode(200)
   async handleWebhook(@Req() req: Request) {
-  try {
-    const rawBody = req.body as string;
+    try {
+      const rawBody = req.body as string;
 
-    this.logger.debug(`Webhook headers: ${JSON.stringify(req.headers)}`);
-    this.logger.debug(`Webhook raw body: ${rawBody}`);
-    this.logger.debug(`Webhook body type: ${typeof rawBody}`);
+      this.logger.debug(`Webhook headers: ${JSON.stringify(req.headers)}`);
+      this.logger.debug(`Webhook raw body: ${rawBody?.slice(0, 200)}...`);
+      this.logger.debug(`Webhook body type: ${typeof rawBody}`);
 
-    if (!rawBody) {
-      this.logger.warn('Webhook bo‘sh keldi');
+      // Monitoring pingi kelganda
+      if (!rawBody || rawBody.startsWith('<!DOCTYPE html')) {
+        this.logger.warn('Webhook monitoring yoki bo‘sh request keldi');
+        return { ok: true };
+      }
+
+      await this.paymentsService.handleCallback(rawBody);
+      return { ok: true };
+    } catch (err) {
+      this.logger.error(`Webhook xato: ${err.message}`, err.stack);
       return { ok: true };
     }
-
-    await this.paymentsService.handleCallback(rawBody);
-    return { ok: true };
-  } catch (err) {
-    this.logger.error(`Webhook xato: ${err.message}`, err.stack);
-    return { ok: true };
   }
-}
 }

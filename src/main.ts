@@ -1,12 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import * as express from 'express';
+import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.use('/payments/webhook', express.text({ type: ['text/*', 'application/json', '*/*'] }));
+  app.use('/payments/webhook', bodyParser.text({ type: '*/*' }));
+
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,

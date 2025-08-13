@@ -58,7 +58,7 @@ export class PaymentsService {
       degree = level.name;
     }
 
-    // Purchase yozish
+    // Purchase yaratish
     const purchase = await this.purchasesService.create(createPaymentDto, userId);
     if (!purchase?.id) throw new BadRequestException('Purchase ID noto‘g‘ri');
 
@@ -81,28 +81,28 @@ export class PaymentsService {
     }
 
     try {
-     const response = await axios.post(
-  'https://enter.tochka.com/uapi/acquiring/v1.0/payments',
-  {
-    Data: {
-      customerCode,
-      amount: Number(Number(category.price).toFixed(2)),
-      purpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
-      paymentMode: ['card'],
-      saveCard: false,
-      merchantId,
-      preAuthorization: false,
-      ttl: 10080,
-      sourceName: 'A+ Academy',
-    },
-  },
-  {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  },
-);
+      const response = await axios.post(
+        'https://enter.tochka.com/uapi/acquiring/v1.0/payments',
+        {
+          Data: {
+            customerCode,
+            amount: Number(Number(category.price).toFixed(2)),
+            purpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
+            paymentMode: ['card'],
+            saveCard: false,
+            merchantId,
+            preAuthorization: false,
+            ttl: 10080,
+            sourceName: 'A+ Academy',
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      );
 
       const { paymentLink, operationId } = response.data.Data;
       savedPayment.transactionId = operationId;
@@ -145,7 +145,7 @@ export class PaymentsService {
       if (data.status === 'APPROVED') {
         payment.status = 'completed';
         await this.paymentRepository.save(payment);
-        await this.purchasesService.confirmPurchase(payment.purchaseId); // kurs ulanishi shu yerda
+        await this.purchasesService.confirmPurchase(payment.purchaseId);
       } else if (['REFUNDED', 'EXPIRED', 'REFUNDED_PARTIALLY'].includes(data.status)) {
         payment.status = 'failed';
         await this.paymentRepository.save(payment);
