@@ -13,6 +13,16 @@ export class DocumentsService {
     private usersService: UsersService,
   ) {}
 
+  // Fayl nomini to‘g‘rilovchi yordamchi funksiya
+  private fixFileName(fileName: string): string {
+    // Agar faqat normal belgilar bo‘lsa — o‘z holicha
+    if (/^[\w\s\p{L}\p{N}().,_-]+$/u.test(fileName)) {
+      return fileName;
+    }
+    // Aks holda latin1 → utf8
+    return iconv.decode(Buffer.from(fileName, 'latin1'), 'utf8');
+  }
+
   async uploadDocument(userId: number, file: Express.Multer.File) {
     const user = await this.usersService.findOne(userId);
     if (!user) {
@@ -29,7 +39,7 @@ export class DocumentsService {
 
     return {
       id: savedDoc.id,
-      fileName: savedDoc.fileName,
+      fileName: this.fixFileName(savedDoc.fileName),
       createdAt: savedDoc.createdAt,
       user: {
         id: user.id,
@@ -47,34 +57,32 @@ export class DocumentsService {
 
     return documents.map(doc => ({
       id: doc.id,
-      fileName: doc.fileName,
+      fileName: this.fixFileName(doc.fileName),
       createdAt: doc.createdAt,
     }));
   }
-async findAll() {
-  const documents = await this.documentRepository.find({
-    relations: ['user'],
-    order: { createdAt: 'DESC' },
-  });
 
-  return documents.map(doc => {
-    const fixedFileName = iconv.decode(Buffer.from(doc.fileName, 'latin1'), 'utf8');
+  async findAll() {
+    const documents = await this.documentRepository.find({
+      relations: ['user'],
+      order: { createdAt: 'DESC' },
+    });
 
-    return {
+    return documents.map(doc => ({
       id: doc.id,
-      fileName: fixedFileName,
+      fileName: this.fixFileName(doc.fileName),
       createdAt: doc.createdAt,
       user: {
         id: doc.user?.id,
         username: doc.user?.username,
         email: doc.user?.email,
       },
-    };
-  });
-}
+    }));
+  }
 
-
-  async getFileBuffer(docId: number): Promise<{ buffer: Buffer; fileName: string; mimeType: string }> {
+  async getFileBuffer(
+    docId: number,
+  ): Promise<{ buffer: Buffer; fileName: string; mimeType: string }> {
     const document = await this.documentRepository.findOne({ where: { id: docId } });
     if (!document) {
       throw new NotFoundException(`Hujjat ID ${docId} topilmadi`);
@@ -92,28 +100,28 @@ async findAll() {
       else if (extension === 'png') mimeType = 'image/png';
     }
 
-    return { buffer: document.fileData, fileName: document.fileName, mimeType };
+    return {
+      buffer: document.fileData,
+      fileName: this.fixFileName(document.fileName),
+      mimeType,
+    };
   }
 
-async getDocumentFileName(docId: number) {
-  const document = await this.documentRepository.findOne({
-    where: { id: docId },
-    select: ['id', 'fileName'], // faqat kerakli maydonlar
-  });
+  async getDocumentFileName(docId: number) {
+    const document = await this.documentRepository.findOne({
+      where: { id: docId },
+      select: ['id', 'fileName'],
+    });
 
-  if (!document) {
-    throw new NotFoundException(`Hujjat ID ${docId} topilmadi`);
+    if (!document) {
+      throw new NotFoundException(`Hujjat ID ${docId} topilmadi`);
+    }
+
+    return {
+      id: document.id,
+      fileName: this.fixFileName(document.fileName),
+    };
   }
-
-  // Fayl nomini UTF-8 ga o‘tkazish (agar noto‘g‘ri kodlangan bo‘lsa)
-  const fixedFileName = iconv.decode(Buffer.from(document.fileName, 'latin1'), 'utf8');
-
-  return {
-    id: document.id,
-    fileName: fixedFileName,
-  };
-}
-
 
   async deleteDocument(docId: number) {
     const document = await this.documentRepository.findOne({ where: { id: docId } });
