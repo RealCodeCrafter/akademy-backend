@@ -1,3 +1,4 @@
+// payments.controller.ts
 import {
   Controller,
   Post,
@@ -37,27 +38,24 @@ export class PaymentsController {
     this.logger.log(`To'lov boshlash: userId=${userId}`);
     return this.paymentsService.startPayment(createPaymentDto, userId);
   }
-@All('webhook')
-@HttpCode(200)
-async handleWebhook(@Req() req: Request) {
-  try {
-    const rawBody = req.body?.toString('utf8'); // Buffer => string
 
-    this.logger.debug(`Webhook headers: ${JSON.stringify(req.headers)}`);
-    this.logger.debug(`Webhook raw body: ${rawBody}`);
+  @All('webhook')
+  @HttpCode(200)
+  async handleWebhook(@Req() req: Request) {
+    try {
+      const rawBody = req.body?.toString('utf8'); // Bank JWT stringni yuboradi
+      this.logger.debug(`Webhook raw body: ${rawBody}`);
 
-    if (!rawBody) {
-      this.logger.warn('Webhook bo‘sh yoki noto‘g‘ri keldi');
+      if (!rawBody) {
+        this.logger.warn('Webhook bo‘sh keldi');
+        return { ok: true };
+      }
+
+      await this.paymentsService.handleCallback(rawBody);
+      return { ok: true };
+    } catch (err) {
+      this.logger.error(`Webhook xato: ${err.message}`, err.stack);
       return { ok: true };
     }
-
-    await this.paymentsService.handleCallback(rawBody);
-    return { ok: true };
-  } catch (err) {
-    this.logger.error(`Webhook xato: ${err.message}`, err.stack);
-    return { ok: true };
   }
-}
-
-
 }
