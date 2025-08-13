@@ -98,21 +98,18 @@ export class LevelService {
  async delete(id: number) {
   const level = await this.levelRepository.findOne({
     where: { id },
-    relations: ['categories'], // bog‘lanishlarni ham olish
+    relations: ['categories'],
   });
 
   if (!level) {
     throw new NotFoundException(`Level ID ${id} topilmadi`);
   }
-
-  // Bog‘lanishlarni join table’dan o‘chirish
   await this.levelRepository
     .createQueryBuilder()
-    .relation(Level, 'categories') // entity va relation nomi
+    .relation(Level, 'categories')
     .of(level)
     .remove(level.categories);
 
-  // Level’ni o‘chirish
   await this.levelRepository.delete(id);
 
   return { message: `Level ID ${id} o'chirildi` };

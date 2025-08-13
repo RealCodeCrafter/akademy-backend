@@ -11,6 +11,7 @@ import { PaymentModule } from './payment/payment.module';
 import { UserCourseModule } from './user-course/user-course.module';
 import { UserDocumentModule } from './user-document/user-document.module';
 import { LevelModule } from './level/level.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -48,5 +49,6 @@ import { LevelModule } from './level/level.module';
     UserDocumentModule,
     LevelModule,
   ],
+  controllers: [HealthController]
 })
 export class AppModule {}
