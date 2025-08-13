@@ -24,6 +24,6 @@ export class Request {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @ManyToOne(() => User, (user) => user.requests, { nullable: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.requests, { nullable: true, onDelete: 'CASCADE', cascade: true })
   user: User;
 }

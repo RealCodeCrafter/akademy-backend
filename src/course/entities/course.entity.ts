@@ -14,13 +14,13 @@ export class Course {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @OneToMany(() => Purchase, (purchase) => purchase.course)
+  @OneToMany(() => Purchase, (purchase) => purchase.course, { cascade: true })
   purchases: Purchase[];
 
-  @OneToMany(() => UserCourse, (userCourse) => userCourse.course)
+  @OneToMany(() => UserCourse, (userCourse) => userCourse.course, { cascade: true })
   userCourses: UserCourse[];
 
-  @ManyToMany(() => Category, (category) => category.courses)
+  @ManyToMany(() => Category, (category) => category.courses, { cascade: true })
   @JoinTable()
   categories: Category[];
 }

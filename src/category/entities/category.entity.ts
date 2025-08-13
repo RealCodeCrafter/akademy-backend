@@ -23,10 +23,10 @@ export class Category {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @ManyToMany(() => Course, (course) => course.categories)
+  @ManyToMany(() => Course, (course) => course.categories, { cascade: true })
   courses: Course[];
 
-  @ManyToMany(() => Level, (level) => level.categories)
+  @ManyToMany(() => Level, (level) => level.categories, { cascade: true })
   @JoinTable()
   levels: Level[];
 }

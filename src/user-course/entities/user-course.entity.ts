@@ -3,19 +3,18 @@ import { User } from '../../user/entities/user.entity';
 import { Course } from '../../course/entities/course.entity';
 import { Category } from 'src/category/entities/category.entity';
 
-
 @Entity()
 export class UserCourse {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => User, (user) => user.userCourses, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.userCourses, { onDelete: 'CASCADE', cascade: true })
   user: User;
 
-  @ManyToOne(() => Course, (course) => course.userCourses, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Course, (course) => course.userCourses, { onDelete: 'CASCADE', cascade: true })
   course: Course;
 
-  @ManyToOne(() => Category, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Category, { onDelete: 'CASCADE', cascade: true })
   category: Category;
 
   @Column({ default: "unknown" })

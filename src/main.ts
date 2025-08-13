@@ -1,11 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import * as express from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
@@ -14,15 +14,13 @@ async function bootstrap() {
     }),
   );
 
-  // CORS sozlamasi: barcha domenlar uchun ochiq
   app.enableCors({
-    origin: '*', // Har qanday domendan so'rov qabul qilinadi
-    methods: ['POST', 'GET', 'OPTIONS'], // OPTIONS preflight uchun
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    origin: '*',
     credentials: true,
   });
 
-  // Port va host
+  app.use(express.text({ type: 'text/plain' }));
+
   await app.listen(7000, '0.0.0.0');
 }
 bootstrap();

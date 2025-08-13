@@ -12,7 +12,7 @@ export class UserDocument {
   @Column({ type: 'bytea' , nullable: true}) 
   fileData: Buffer;
 
-  @ManyToOne(() => User, (user) => user.documents, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.documents, { onDelete: 'CASCADE', cascade: true })
   user: User;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })

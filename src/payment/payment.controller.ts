@@ -22,7 +22,6 @@ export class PaymentsController {
   private readonly logger = new Logger(PaymentsController.name);
 
   constructor(private readonly paymentsService: PaymentsService) {}
-
   @UseGuards(AuthGuard)
   @Post('start')
   async startPayment(
@@ -57,13 +56,20 @@ export class PaymentsController {
   }
 
   @Post('webhook')
-  async handleWebhook(@Body() payload: any, @Req() req: Request) {
-    this.logger.log(`Webhook so'rovi keldi: ${JSON.stringify(payload)}`);
+  async handleWebhook(@Body('callbackData') callbackData: string) {
+    this.logger.log(`Webhook so'rovi keldi: ${callbackData}`);
+
+    if (!callbackData) {
+      this.logger.error('callbackData parametri taqdim etilmadi');
+      throw new BadRequestException('callbackData parametri taqdim etilmadi');
+    }
 
     try {
-      const result = await this.paymentsService.handleWebhook(payload);
+      const result = await this.paymentsService.handleCallback(callbackData);
       this.logger.log(
-        `Webhook muvaffaqiyatli qayta ishlendi: result=${JSON.stringify(result)}`,
+        `Webhook muvaffaqiyatli qayta ishlendi: result=${JSON.stringify(
+          result,
+        )}`,
       );
       return result;
     } catch (err) {

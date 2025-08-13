@@ -4,7 +4,6 @@ import { Course } from '../../course/entities/course.entity';
 import { Category } from '../../category/entities/category.entity';
 import { Payment } from 'src/payment/entities/payment.entity';
 
-
 @Entity()
 export class Purchase {
   @PrimaryGeneratedColumn()
@@ -25,15 +24,15 @@ export class Purchase {
   @Column({ default: 'pending' })
   status: 'pending' | 'paid' | 'failed';
 
-  @ManyToOne(() => Category, { nullable: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => Category, { nullable: true, onDelete: 'CASCADE', cascade: true })
   category: Category;
 
-  @ManyToOne(() => User, (user) => user.purchases, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, (user) => user.purchases, { onDelete: 'CASCADE', cascade: true })
   user: User;
 
-  @ManyToOne(() => Course, (course) => course.purchases, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Course, (course) => course.purchases, { onDelete: 'CASCADE', cascade: true })
   course: Course;
 
-  @OneToMany(() => Payment, (payment) => payment.purchase)
+  @OneToMany(() => Payment, (payment) => payment.purchase, { cascade: true })
   payments: Payment[];
 }

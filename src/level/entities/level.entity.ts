@@ -12,6 +12,6 @@ export class Level {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @ManyToMany(() => Category, (category) => category.levels)
+  @ManyToMany(() => Category, (category) => category.levels, { cascade: true })
   categories: Category[];
 }

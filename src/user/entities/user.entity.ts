@@ -52,19 +52,19 @@ export class User {
   @Column({ nullable: true })
   studentBirthDate: string;
 
-  @OneToMany(() => Purchase, (purchase) => purchase.user)
+  @OneToMany(() => Purchase, (purchase) => purchase.user, { cascade: true })
   purchases: Purchase[];
 
-  @OneToMany(() => Request, (request) => request.user)
+  @OneToMany(() => Request, (request) => request.user, { cascade: true })
   requests: Request[];
 
-  @OneToMany(() => Payment, (payment) => payment.user)
+  @OneToMany(() => Payment, (payment) => payment.user, { cascade: true })
   payments: Payment[];
 
-  @OneToMany(() => UserCourse, (userCourse) => userCourse.user)
+  @OneToMany(() => UserCourse, (userCourse) => userCourse.user, { cascade: true })
   userCourses: UserCourse[];
 
-  @OneToMany(() => UserDocument, (userDocument) => userDocument.user)
+  @OneToMany(() => UserDocument, (userDocument) => userDocument.user, { cascade: true })
   documents: UserDocument[];
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
