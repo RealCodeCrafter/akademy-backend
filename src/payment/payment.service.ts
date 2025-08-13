@@ -145,12 +145,23 @@ async handleCallback(rawBody: string) {
   } catch (err) {
     console.error('[PaymentsService] Webhook imzo xatosi:', err.message, 'Raw body:', rawBody);
     try {
-      // JSON formatini tekshirish
       const parsed = JSON.parse(rawBody);
       console.warn('[PaymentsService] Webhook JWT emas, JSON formatida:', JSON.stringify(parsed, null, 2));
+      if (parsed.callbackData?.paymentId) {
+        const payment = await this.paymentRepository.findOne({
+          where: { transactionId: parsed.callbackData.paymentId },
+          relations: ['purchase'],
+        });
+        if (!payment) {
+          console.error(`[PaymentsService] Payment topilmadi: paymentId=${parsed.callbackData.paymentId}`);
+          return { status: 'ERROR', reason: 'Payment not found', paymentId: parsed.callbackData.paymentId };
+        }
+        console.warn(`[PaymentsService] JSON formatidagi status: ${parsed.callbackData.status}`);
+        return { status: 'ERROR', reason: 'Webhook is not a valid JWT, but contains paymentId', paymentId: parsed.callbackData.paymentId };
+      }
       return { status: 'ERROR', reason: 'Webhook is not a valid JWT' };
     } catch (jsonErr) {
-      console.error('[PaymentsService] Webhook JSON sifatida ham noto‘g‘ri:', jsonErr.message);
+      console.error('[PaymentsService] Webhook JSON sifatida ham noto‘g‘ri:', jsonErr.message, 'Raw body:', rawBody);
       throw new BadRequestException('Webhook imzosi noto‘g‘ri yoki buzilgan');
     }
   }
@@ -169,7 +180,7 @@ async handleCallback(rawBody: string) {
     console.error(`[PaymentsService] Payment topilmadi: operationId=${decoded.operationId}`);
     console.log(`[PaymentsService] Ma'lumotlar bazasidagi so'nggi operationId'lar:`, 
       await this.paymentRepository.find({ select: ['transactionId'], take: 5 }));
-    return { status: 'ERROR', reason: 'Payment not found' };
+    return { status: 'ERROR', reason: 'Payment not found', operationId: decoded.operationId };
   }
 
   switch (decoded.status) {
