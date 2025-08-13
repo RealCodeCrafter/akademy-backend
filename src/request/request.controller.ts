@@ -1,14 +1,23 @@
-import { Controller, Get, Post, Body, Patch, Param, UseGuards, Put, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Put,
+  Delete,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { RequestsService } from './request.service';
 import { CreateRequestDto } from './dto/create-request.dto';
 import { UpdateRequestDto } from './dto/update-request.dto';
-import { AuthGuard } from '../auth/auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { Roles } from '../auth/roles.decorator';
+// import { AuthGuard } from '../auth/auth.guard';
+// import { RolesGuard } from '../auth/roles.guard';
+// import { Roles } from '../auth/roles.decorator';
 
 @Controller('requests')
 export class RequestsController {
-  constructor(private requestsService: RequestsService) {}
+  constructor(private readonly requestsService: RequestsService) {}
 
   @Post()
   create(@Body() createRequestDto: CreateRequestDto) {
@@ -29,35 +38,34 @@ export class RequestsController {
     return this.requestsService.findAccepted();
   }
 
-  
-
   // @UseGuards(AuthGuard, RolesGuard)
-// @Roles('admin')
+  // @Roles('admin')
   @Get('pending')
   findPending() {
     return this.requestsService.findPending();
   }
-  
+
   // @UseGuards(AuthGuard, RolesGuard)
   // @Roles('admin')
   @Put(':id')
-  update(@Param('id') id: string, @Body() updateRequestDto: UpdateRequestDto) {
-    return this.requestsService.update(+id, updateRequestDto);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateRequestDto: UpdateRequestDto,
+  ) {
+    return this.requestsService.update(id, updateRequestDto);
   }
 
-  
   // @UseGuards(AuthGuard, RolesGuard)
   // @Roles('admin')
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.requestsService.findOne(+id);
+  findOne(@Param('id', ParseIntPipe) id: number) {
+    return this.requestsService.findOne(id);
   }
 
   // @UseGuards(AuthGuard, RolesGuard)
   // @Roles('admin')
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.requestsService.delete(+id);
+  delete(@Param('id', ParseIntPipe) id: number) {
+    return this.requestsService.delete(id);
   }
-
 }
