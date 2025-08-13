@@ -39,26 +39,30 @@ export class PaymentsController {
   }
 
   @All('webhook')
-  @HttpCode(200)
-  async handleWebhook(@Req() req: Request) {
-    try {
-      const rawBody = req.body as string;
+@HttpCode(200)
+async handleWebhook(@Req() req: Request) {
+  try {
+    // Raw text body faqat POST bo'lsa olinadi
+    const rawBody =
+      req.method === 'POST' && typeof req.body === 'string'
+        ? req.body
+        : undefined;
 
-      this.logger.debug(`Webhook headers: ${JSON.stringify(req.headers)}`);
-      this.logger.debug(`Webhook raw body: ${rawBody?.slice(0, 200)}...`);
-      this.logger.debug(`Webhook body type: ${typeof rawBody}`);
+    this.logger.debug(`Webhook headers: ${JSON.stringify(req.headers)}`);
+    this.logger.debug(`Webhook raw body: ${rawBody}`);
+    this.logger.debug(`Webhook body type: ${typeof rawBody}`);
 
-      // Monitoring pingi kelganda
-      if (!rawBody || rawBody.startsWith('<!DOCTYPE html')) {
-        this.logger.warn('Webhook monitoring yoki bo‘sh request keldi');
-        return { ok: true };
-      }
-
-      await this.paymentsService.handleCallback(rawBody);
-      return { ok: true };
-    } catch (err) {
-      this.logger.error(`Webhook xato: ${err.message}`, err.stack);
+    if (!rawBody) {
+      this.logger.warn('Webhook monitoring yoki bo‘sh request keldi');
       return { ok: true };
     }
+
+    await this.paymentsService.handleCallback(rawBody);
+    return { ok: true };
+  } catch (err) {
+    this.logger.error(`Webhook xato: ${err.message}`, err.stack);
+    return { ok: true };
   }
+}
+
 }
