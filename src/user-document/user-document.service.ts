@@ -51,24 +51,28 @@ export class DocumentsService {
       createdAt: doc.createdAt,
     }));
   }
+async findAll() {
+  const documents = await this.documentRepository.find({
+    relations: ['user'],
+    order: { createdAt: 'DESC' },
+  });
 
-  async findAll() {
-    const documents = await this.documentRepository.find({
-      relations: ['user'],
-      order: { createdAt: 'DESC' },
-    });
+  return documents.map(doc => {
+    const fixedFileName = iconv.decode(Buffer.from(doc.fileName, 'latin1'), 'utf8');
 
-    return documents.map(doc => ({
+    return {
       id: doc.id,
-      fileName: doc.fileName,
+      fileName: fixedFileName,
       createdAt: doc.createdAt,
       user: {
         id: doc.user?.id,
         username: doc.user?.username,
         email: doc.user?.email,
       },
-    }));
-  }
+    };
+  });
+}
+
 
   async getFileBuffer(docId: number): Promise<{ buffer: Buffer; fileName: string; mimeType: string }> {
     const document = await this.documentRepository.findOne({ where: { id: docId } });
