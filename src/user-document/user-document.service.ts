@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserDocument } from './entities/user-document.entity';
 import { UsersService } from '../user/user.service';
+import * as iconv from 'iconv-lite';
 
 @Injectable()
 export class DocumentsService {
@@ -19,7 +20,7 @@ export class DocumentsService {
     }
 
     const document = this.documentRepository.create({
-      fileName: file.originalname, // Bu joyda allaqachon UTF-8 bo'ladi
+      fileName: file.originalname,
       fileData: file.buffer,
       user,
     });
@@ -89,6 +90,26 @@ export class DocumentsService {
 
     return { buffer: document.fileData, fileName: document.fileName, mimeType };
   }
+
+async getDocumentFileName(docId: number) {
+  const document = await this.documentRepository.findOne({
+    where: { id: docId },
+    select: ['id', 'fileName'], // faqat kerakli maydonlar
+  });
+
+  if (!document) {
+    throw new NotFoundException(`Hujjat ID ${docId} topilmadi`);
+  }
+
+  // Fayl nomini UTF-8 ga o‘tkazish (agar noto‘g‘ri kodlangan bo‘lsa)
+  const fixedFileName = iconv.decode(Buffer.from(document.fileName, 'latin1'), 'utf8');
+
+  return {
+    id: document.id,
+    fileName: fixedFileName,
+  };
+}
+
 
   async deleteDocument(docId: number) {
     const document = await this.documentRepository.findOne({ where: { id: docId } });

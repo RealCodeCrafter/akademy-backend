@@ -85,6 +85,12 @@ export class DocumentsController {
     }
   }
 
+  @Get(':docId/filename')
+async getDocumentFileName(@Param('docId') docId: string) {
+  return this.documentsService.getDocumentFileName(+docId);
+}
+
+
   @Delete(':docId')
   deleteDocument(@Param('docId') docId: string) {
     return this.documentsService.deleteDocument(+docId);
