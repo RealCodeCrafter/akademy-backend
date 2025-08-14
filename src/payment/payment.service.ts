@@ -176,6 +176,7 @@ export class PaymentsService {
     } catch (err) {
       return { ok: false, error: `Payment status xatosi: ${err.response?.data?.message || err.message}` };
     }
+    
   }
 
   @Cron(CronExpression.EVERY_5_MINUTES)

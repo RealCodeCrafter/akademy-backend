@@ -11,6 +11,7 @@ export class PaymentsCronService {
     private paymentRepository: Repository<Payment>,
   ) {}
 
+  
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async cleanPendingPayments() {
     const thresholdDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
