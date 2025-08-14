@@ -5,6 +5,7 @@ import { UserCourse } from './entities/user-course.entity';
 import { User } from '../user/entities/user.entity';
 import { Course } from '../course/entities/course.entity';
 import { Category } from '../category/entities/category.entity';
+import { addMonths } from 'date-fns';
 
 @Injectable()
 export class UserCourseService {
@@ -12,16 +13,17 @@ export class UserCourseService {
 
   constructor(
     @InjectRepository(UserCourse)
-    private userCourseRepository: Repository<UserCourse>,
-    @InjectRepository(User) private userRepository: Repository<User>,
+    private readonly userCourseRepository: Repository<UserCourse>,
+    @InjectRepository(User) private readonly userRepository: Repository<User>,
     @InjectRepository(Course)
-    private courseRepository: Repository<Course>,
+    private readonly courseRepository: Repository<Course>,
     @InjectRepository(Category)
-    private categoryRepository: Repository<Category>,
+    private readonly categoryRepository: Repository<Category>,
   ) {}
 
   async assignCourseToUser(userId: number, courseId: number, categoryId: number, degree: string) {
     this.logger.log(`Assigning course to user: userId=${userId}, courseId=${courseId}, categoryId=${categoryId}, degree=${degree}`);
+
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
       this.logger.error(`User ID ${userId} not found`);
@@ -43,13 +45,13 @@ export class UserCourseService {
     const existingUserCourse = await this.userCourseRepository.findOne({
       where: { user: { id: userId }, course: { id: courseId } },
     });
+
+    const expiresAt = addMonths(new Date(), category.durationMonths || 6); // ✅ aniq oy qo‘shish
+
     if (existingUserCourse && existingUserCourse.expiresAt > new Date()) {
       this.logger.warn(`Course already assigned and active: userId=${userId}, courseId=${courseId}`);
       return existingUserCourse;
     }
-
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + (category.durationMonths || 6));
 
     const userCourse = this.userCourseRepository.create({
       user,
