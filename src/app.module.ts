@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule'; // Qo‘shildi
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './user/user.module';
 import { RequestsModule } from './request/request.module';
@@ -15,11 +16,11 @@ import { HealthController } from './health.controller';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(), 
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
-
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -37,7 +38,6 @@ import { HealthController } from './health.controller';
         },
       }),
     }),
-
     AuthModule,
     UsersModule,
     RequestsModule,
@@ -49,6 +49,6 @@ import { HealthController } from './health.controller';
     UserDocumentModule,
     LevelModule,
   ],
-  controllers: [HealthController]
+  controllers: [HealthController],
 })
 export class AppModule {}
