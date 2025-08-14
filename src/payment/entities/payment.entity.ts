@@ -11,8 +11,8 @@ export class Payment {
   @Column()
   amount: number;
 
-  @Column()
-  transactionId: string;
+  @Column({nullable: true})
+  transactionId: string | null
 
   @Column({ type: 'enum', enum: ['pending', 'completed', 'failed'], default: 'pending' })
   status: 'pending' | 'completed' | 'failed';
