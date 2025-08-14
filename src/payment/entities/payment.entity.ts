@@ -8,8 +8,8 @@ export class Payment {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  amount: number;
+  @Column({ default: 0 })
+amount: number;
 
   @Column()
   transactionId: string;
