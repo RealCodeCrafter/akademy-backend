@@ -9,7 +9,7 @@ export class Payment {
   id: number;
 
   @Column({ default: 0 })
-amount: number;
+  amount: number;
 
   @Column()
   transactionId: string;

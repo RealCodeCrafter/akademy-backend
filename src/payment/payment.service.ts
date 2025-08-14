@@ -178,23 +178,4 @@ export class PaymentsService {
     }
     
   }
-
-  @Cron(CronExpression.EVERY_5_MINUTES)
-  async pollPendingPayments() {
-    const pendingPayments = await this.paymentRepository.find({ where: { status: 'pending' } });
-    for (const payment of pendingPayments) {
-      const result = await this.checkPaymentStatus(payment.transactionId);
-      if (!result.ok) continue;
-
-      const status = result.data.Operation[0]?.status;
-      if (status === 'APPROVED' || status === 'AUTHORIZED') {
-        payment.status = 'completed';
-        await this.paymentRepository.save(payment);
-        await this.purchasesService.confirmPurchase(payment.purchaseId);
-      } else if (['DECLINED', 'EXPIRED', 'REFUNDED', 'REFUNDED_PARTIALLY'].includes(status)) {
-        payment.status = 'failed';
-        await this.paymentRepository.save(payment);
-      }
-    }
-  }
 }
