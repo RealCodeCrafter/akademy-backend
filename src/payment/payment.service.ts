@@ -51,6 +51,11 @@ export class PaymentsService {
       return { ok: false, error: 'Kategoriya ushbu kursga tegishli emas' };
     }
 
+    if (category.price == null) {
+      console.error('Kategoriya narxi topilmadi:', createPaymentDto.categoryId);
+      return { ok: false, error: 'Kategoriya narxi topilmadi' };
+    }
+
     let degree = category.name;
     if (createPaymentDto.levelId) {
       const level = await this.levelService.findOne(createPaymentDto.levelId);
@@ -77,7 +82,7 @@ export class PaymentsService {
 
     const payment = this.paymentRepository.create({
       amount: Number(category.price.toFixed(2)),
-      transactionId: null, // Dastlab null, keyin operationId bilan yangilanadi
+      transactionId: null,
       status: 'pending',
       user,
       purchaseId: purchase.id,
@@ -119,7 +124,7 @@ export class PaymentsService {
       );
 
       const { paymentLink, operationId } = response.data.Data;
-      savedPayment.transactionId = operationId; // operationId bilan yangilash
+      savedPayment.transactionId = operationId;
       await this.paymentRepository.save(savedPayment);
       console.log('Payment updated with operationId:', operationId);
 

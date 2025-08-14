@@ -1,4 +1,3 @@
-// payment.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { Purchase } from '../../purchases/entities/purchase.entity';
@@ -8,11 +7,11 @@ export class Payment {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  amount: number;
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  amount: number | null;
 
-  @Column({nullable: true})
-  transactionId: string | null
+  @Column({ type: 'varchar', nullable: true })
+  transactionId: string | null;
 
   @Column({ type: 'enum', enum: ['pending', 'completed', 'failed'], default: 'pending' })
   status: 'pending' | 'completed' | 'failed';
@@ -20,11 +19,11 @@ export class Payment {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 
-  @ManyToOne(() => User, (user) => user.payments, { onDelete: 'CASCADE' })
-  user: User;
-
   @Column()
   purchaseId: number;
+
+  @ManyToOne(() => User, (user) => user.payments, { onDelete: 'CASCADE' })
+  user: User;
 
   @ManyToOne(() => Purchase, (purchase) => purchase.payments, { onDelete: 'CASCADE' })
   purchase: Purchase;
