@@ -95,7 +95,7 @@ export class PaymentsService {
           {
             Data: {
               customerCode: tochkaCustomerCode,
-              amount: Number(category.price.toFixed(2)) * 100,
+              amount: category.price,
               purpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
               paymentMode: ['card'],
               saveCard: false,
@@ -174,7 +174,7 @@ export class PaymentsService {
           {
             order: {
               id: orderId,
-              amount: Math.round(Number(category.price) * 100),
+              amount: category.price,
               prepaid_amount: 0,
               items: [
                 {
@@ -254,7 +254,7 @@ export class PaymentsService {
         {
           order: {
             id: orderId,
-            amount: Number(amount.toFixed(2)) * 100,
+            amount: amount,
             prepaid_amount: 0,
             items,
           },
@@ -341,7 +341,7 @@ export class PaymentsService {
       const response = await axios.post(
         `${dolyameApiUrl}/orders/${orderId}/refund`,
         {
-          amount: Number(amount.toFixed(2)) * 100,
+          amount: amount,
           refunded_prepaid_amount: 0,
           returned_items: items,
         },
@@ -427,7 +427,7 @@ export class PaymentsService {
         {
           order: {
             id: orderId,
-            amount: Number(amount.toFixed(2)) * 100,
+            amount: amount,
             prepaid_amount: 0,
             items,
           },
@@ -811,7 +811,7 @@ export class PaymentsService {
     const receiptId = uuidv4();
     const orderId = `order_${internalTransactionId}`;
     const payment = this.paymentRepository.create({
-      amount: Number(amount.toFixed(2)),
+      amount: amount,
       transactionId: null,
       providerOperationId: internalTransactionId,
       status: 'pending',
