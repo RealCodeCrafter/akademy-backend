@@ -532,13 +532,13 @@ export class PaymentsService {
   }
 
   async handleDolyameWebhook(body: any, req: any) {
-    this.logger.log(`Dolyame webhook: ${JSON.stringify(body)}`);
+    // this.logger.log(`Dolyame webhook: ${JSON.stringify(body)}`);
 
-    const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    if (!this.isValidDolyameIp(clientIp)) {
-      this.logger.warn(`Noto'g'ri IP manzildan webhook keldi: ${clientIp}`);
-      throw new HttpException('Notogri IP manzil', HttpStatus.FORBIDDEN);
-    }
+    // const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    // if (!this.isValidDolyameIp(clientIp)) {
+    //   this.logger.warn(`Noto'g'ri IP manzildan webhook keldi: ${clientIp}`);
+    //   throw new HttpException('Notogri IP manzil', HttpStatus.FORBIDDEN);
+    // }
 
     const { payment_id, status, amount, residual_amount, client_info, payment_schedule } = body;
     if (!payment_id || !status) {
