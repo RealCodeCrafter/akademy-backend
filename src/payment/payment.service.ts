@@ -532,61 +532,62 @@ export class PaymentsService {
   }
 
   async handleDolyameWebhook(body: any, req: any) {
-    // this.logger.log(`Dolyame webhook: ${JSON.stringify(body)}`);
+  // this.logger.log(`Dolyame webhook: ${JSON.stringify(body)}`);
 
-    // const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    // if (!this.isValidDolyameIp(clientIp)) {
-    //   this.logger.warn(`Noto'g'ri IP manzildan webhook keldi: ${clientIp}`);
-    //   throw new HttpException('Notogri IP manzil', HttpStatus.FORBIDDEN);
-    // }
+  // const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  // if (!this.isValidDolyameIp(clientIp)) {
+  //   this.logger.warn(`Noto'g'ri IP manzildan webhook keldi: ${clientIp}`);
+  //   throw new HttpException('Notogri IP manzil', HttpStatus.FORBIDDEN);
+  // }
 
-    const { payment_id, status, amount, residual_amount, client_info, payment_schedule } = body;
-    if (!payment_id || !status) {
-      this.logger.warn(`Noto'g'ri webhook ma'lumotlari: ${JSON.stringify(body)}`);
-      throw new HttpException('Notogri webhook malumotlari', HttpStatus.BAD_REQUEST);
-    }
-
-    const payment = await this.paymentRepository.findOne({
-      where: { transactionId: payment_id, provider: 'dolyame' },
-      relations: ['purchase'],
-    });
-
-    if (!payment) {
-      this.logger.warn(`Payment topilmadi: ${payment_id}`);
-      return { ok: true, error: `Payment topilmadi: ${payment_id}` };
-    }
-
-    const validStatuses = ['approved', 'rejected', 'canceled', 'committed', 'wait_for_commit', 'completed'];
-    if (!validStatuses.includes(status)) {
-      this.logger.warn(`Noto'g'ri status: ${status}`);
-      throw new HttpException('Notogri status', HttpStatus.BAD_REQUEST);
-    }
-
-    try {
-      payment.status = status === 'rejected' || status === 'canceled' ? 'failed' : status;
-      payment.amount = amount ? Number((amount / 100).toFixed(2)) : payment.amount;
-      if (residual_amount !== undefined) {
-        payment['residual_amount'] = Number((residual_amount / 100).toFixed(2));
-      }
-      if (client_info) {
-        payment['client_info'] = JSON.stringify(client_info);
-      }
-      if (payment_schedule) {
-        payment['payment_schedule'] = JSON.stringify(payment_schedule);
-      }
-      await this.paymentRepository.save(payment);
-
-      if (status === 'completed') {
-        await this.purchasesService.confirmPurchase(payment.purchaseId);
-      }
-
-      this.logger.log(`Webhook muvaffaqiyatli qayta ishlandi: ${payment_id}, status: ${status}`);
-      return { ok: true, paymentId: payment_id };
-    } catch (error) {
-      this.logger.error(`Webhookni qayta ishlashda xato: ${error.message}`, error.stack);
-      throw new HttpException('Webhookni qayta ishlashda xato', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+  const { payment_id, status, amount, residual_amount, client_info, payment_schedule } = body;
+  if (!payment_id || !status) {
+    this.logger.warn(`Noto'g'ri webhook ma'lumotlari: ${JSON.stringify(body)}`);
+    throw new HttpException('Notogri webhook malumotlari', HttpStatus.BAD_REQUEST);
   }
+
+  // payment_id ni providerOperationId bilan solishtirish
+  const payment = await this.paymentRepository.findOne({
+    where: { providerOperationId: payment_id, provider: 'dolyame' }, // transactionId o'rniga providerOperationId
+    relations: ['purchase'],
+  });
+
+  if (!payment) {
+    this.logger.warn(`Payment topilmadi: ${payment_id}`);
+    return { ok: true, error: `Payment topilmadi: ${payment_id}` };
+  }
+
+  const validStatuses = ['approved', 'rejected', 'canceled', 'committed', 'wait_for_commit', 'completed'];
+  if (!validStatuses.includes(status)) {
+    this.logger.warn(`Noto'g'ri status: ${status}`);
+    throw new HttpException('Notogri status', HttpStatus.BAD_REQUEST);
+  }
+
+  try {
+    payment.status = status === 'rejected' || status === 'canceled' ? 'failed' : status;
+    payment.amount = amount ? Number((amount / 100).toFixed(2)) : payment.amount;
+    if (residual_amount !== undefined) {
+      payment['residual_amount'] = Number((residual_amount / 100).toFixed(2));
+    }
+    if (client_info) {
+      payment['client_info'] = JSON.stringify(client_info);
+    }
+    if (payment_schedule) {
+      payment['payment_schedule'] = JSON.stringify(payment_schedule);
+    }
+    await this.paymentRepository.save(payment);
+
+    if (status === 'completed') {
+      await this.purchasesService.confirmPurchase(payment.purchaseId);
+    }
+
+    this.logger.log(`Webhook muvaffaqiyatli qayta ishlandi: ${payment_id}, status: ${status}`);
+    return { ok: true, paymentId: payment_id };
+  } catch (error) {
+    this.logger.error(`Webhookni qayta ishlashda xato: ${error.message}`, error.stack);
+    throw new HttpException('Webhookni qayta ishlashda xato', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+}
 
   async checkPaymentStatus(requestId: string, provider: string = 'tochka') {
     if (provider === 'tochka') {
