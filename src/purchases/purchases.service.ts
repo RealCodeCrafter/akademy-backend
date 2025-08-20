@@ -74,6 +74,7 @@ export class PurchasesService {
       course,
       category,
     });
+    
 
     const saved = await this.purchasesRepository.save(purchase);
     this.logger.log(`Purchase created: ID ${saved.id}`);
