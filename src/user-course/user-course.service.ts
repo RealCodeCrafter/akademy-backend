@@ -73,27 +73,28 @@ export class UserCourseService {
   }
 
   async findUserCourses(userId: number) {
-    const userCourses = await this.userCourseRepository.find({
-      where: { user: { id: userId } },
-      relations: ['course', 'course.categories', 'category'],
-      order: { createdAt: 'ASC' },
-    });
+  const userCourses = await this.userCourseRepository.find({
+    where: { user: { id: userId } },
+    relations: ['course', 'category'], // faqat course va sotib olingan category
+    order: { createdAt: 'ASC' },
+  });
 
-    return userCourses.map(userCourse => ({
-      id: userCourse.id,
-      course: {
-        id: userCourse.course.id,
-        name: userCourse.course.name,
-        durationMonths: userCourse.category.durationMonths,
-        categories: userCourse.course.categories.map(category => ({
-          id: category.id,
-          name: category.name,
-          price: category.price,
-        })),
-      },
-      degree: userCourse.degree,
-      expiresAt: userCourse.expiresAt,
-      createdAt: userCourse.createdAt,
-    }));
-  }
+  return userCourses.map(userCourse => ({
+    id: userCourse.id,
+    course: {
+      id: userCourse.course.id,
+      name: userCourse.course.name,
+      durationMonths: userCourse.category.durationMonths, // sotib olingan category
+      categories: [{ // faqat sotib olingan category
+        id: userCourse.category.id,
+        name: userCourse.category.name,
+        price: userCourse.category.price,
+      }],
+    },
+    degree: userCourse.degree,
+    expiresAt: userCourse.expiresAt,
+    createdAt: userCourse.createdAt,
+  }));
+}
+
 }
