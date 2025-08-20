@@ -1,4 +1,3 @@
-
 import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -65,7 +64,7 @@ export class PaymentsService {
     const internalTransactionId = `txn_${Date.now()}`;
     const receiptId = uuidv4();
     const payment = this.paymentRepository.create({
-      amount: category.price,
+      amount: Number(category.price.toFixed(2)), // Rubl sifatida saqlash
       transactionId: null,
       providerOperationId: internalTransactionId,
       status: 'pending',
@@ -95,7 +94,7 @@ export class PaymentsService {
           {
             Data: {
               customerCode: tochkaCustomerCode,
-              amount: category.price,
+              amount: Number(category.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
               purpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
               paymentMode: ['card'],
               saveCard: false,
@@ -174,12 +173,12 @@ export class PaymentsService {
           {
             order: {
               id: orderId,
-              amount: category.price,
+              amount: Number(category.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
               prepaid_amount: 0,
               items: [
                 {
                   name: course.name,
-                  price: Math.round(Number(category.price) * 100),
+                  price: Number(category.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
                   quantity: 1,
                   sku: `sku_${course.id}`,
                   unit: 'шт',
@@ -254,9 +253,12 @@ export class PaymentsService {
         {
           order: {
             id: orderId,
-            amount: amount,
+            amount: Number(amount.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
             prepaid_amount: 0,
-            items,
+            items: items.map(item => ({
+              ...item,
+              price: Number(item.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+            })),
           },
         },
         {
@@ -341,9 +343,12 @@ export class PaymentsService {
       const response = await axios.post(
         `${dolyameApiUrl}/orders/${orderId}/refund`,
         {
-          amount: amount,
+          amount: Number(amount.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
           refunded_prepaid_amount: 0,
-          returned_items: items,
+          returned_items: items.map(item => ({
+            ...item,
+            price: Number(item.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+          })),
         },
         {
           headers: {
@@ -427,9 +432,12 @@ export class PaymentsService {
         {
           order: {
             id: orderId,
-            amount: amount,
+            amount: Number(amount.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
             prepaid_amount: 0,
-            items,
+            items: items.map(item => ({
+              ...item,
+              price: Number(item.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+            })),
           },
         },
         {
@@ -532,62 +540,53 @@ export class PaymentsService {
   }
 
   async handleDolyameWebhook(body: any, req: any) {
-  // this.logger.log(`Dolyame webhook: ${JSON.stringify(body)}`);
-
-  // const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-  // if (!this.isValidDolyameIp(clientIp)) {
-  //   this.logger.warn(`Noto'g'ri IP manzildan webhook keldi: ${clientIp}`);
-  //   throw new HttpException('Notogri IP manzil', HttpStatus.FORBIDDEN);
-  // }
-
-  const { payment_id, status, amount, residual_amount, client_info, payment_schedule } = body;
-  if (!payment_id || !status) {
-    this.logger.warn(`Noto'g'ri webhook ma'lumotlari: ${JSON.stringify(body)}`);
-    throw new HttpException('Notogri webhook malumotlari', HttpStatus.BAD_REQUEST);
-  }
-
-  // payment_id ni providerOperationId bilan solishtirish
-  const payment = await this.paymentRepository.findOne({
-    where: { providerOperationId: payment_id, provider: 'dolyame' }, // transactionId o'rniga providerOperationId
-    relations: ['purchase'],
-  });
-
-  if (!payment) {
-    this.logger.warn(`Payment topilmadi: ${payment_id}`);
-    return { ok: true, error: `Payment topilmadi: ${payment_id}` };
-  }
-
-  const validStatuses = ['approved', 'rejected', 'canceled', 'committed', 'wait_for_commit', 'completed'];
-  if (!validStatuses.includes(status)) {
-    this.logger.warn(`Noto'g'ri status: ${status}`);
-    throw new HttpException('Notogri status', HttpStatus.BAD_REQUEST);
-  }
-
-  try {
-    payment.status = status === 'rejected' || status === 'canceled' ? 'failed' : status;
-    payment.amount = amount ? Number((amount / 100).toFixed(2)) : payment.amount;
-    if (residual_amount !== undefined) {
-      payment['residual_amount'] = Number((residual_amount / 100).toFixed(2));
-    }
-    if (client_info) {
-      payment['client_info'] = JSON.stringify(client_info);
-    }
-    if (payment_schedule) {
-      payment['payment_schedule'] = JSON.stringify(payment_schedule);
-    }
-    await this.paymentRepository.save(payment);
-
-    if (status === 'completed') {
-      await this.purchasesService.confirmPurchase(payment.purchaseId);
+    const { payment_id, status, amount, residual_amount, client_info, payment_schedule } = body;
+    if (!payment_id || !status) {
+      this.logger.warn(`Noto'g'ri webhook ma'lumotlari: ${JSON.stringify(body)}`);
+      throw new HttpException('Notogri webhook malumotlari', HttpStatus.BAD_REQUEST);
     }
 
-    this.logger.log(`Webhook muvaffaqiyatli qayta ishlandi: ${payment_id}, status: ${status}`);
-    return { ok: true, paymentId: payment_id };
-  } catch (error) {
-    this.logger.error(`Webhookni qayta ishlashda xato: ${error.message}`, error.stack);
-    throw new HttpException('Webhookni qayta ishlashda xato', HttpStatus.INTERNAL_SERVER_ERROR);
+    const payment = await this.paymentRepository.findOne({
+      where: { providerOperationId: payment_id, provider: 'dolyame' },
+      relations: ['purchase'],
+    });
+
+    if (!payment) {
+      this.logger.warn(`Payment topilmadi: ${payment_id}`);
+      return { ok: true, error: `Payment topilmadi: ${payment_id}` };
+    }
+
+    const validStatuses = ['approved', 'rejected', 'canceled', 'committed', 'wait_for_commit', 'completed'];
+    if (!validStatuses.includes(status)) {
+      this.logger.warn(`Noto'g'ri status: ${status}`);
+      throw new HttpException('Notogri status', HttpStatus.BAD_REQUEST);
+    }
+
+    try {
+      payment.status = status === 'rejected' || status === 'canceled' ? 'failed' : status;
+      payment.amount = Number(amount.toFixed(2)); // 100 ga bo'lish olib tashlandi
+      if (residual_amount !== undefined) {
+        payment['residual_amount'] = Number(residual_amount.toFixed(2)); // 100 ga bo'lish olib tashlandi
+      }
+      if (client_info) {
+        payment['client_info'] = JSON.stringify(client_info);
+      }
+      if (payment_schedule) {
+        payment['payment_schedule'] = JSON.stringify(payment_schedule);
+      }
+      await this.paymentRepository.save(payment);
+
+      if (status === 'completed') {
+        await this.purchasesService.confirmPurchase(payment.purchaseId);
+      }
+
+      this.logger.log(`Webhook muvaffaqiyatli qayta ishlandi: ${payment_id}, status: ${status}`);
+      return { ok: true, paymentId: payment_id };
+    } catch (error) {
+      this.logger.error(`Webhookni qayta ishlashda xato: ${error.message}`, error.stack);
+      throw new HttpException('Webhookni qayta ishlashda xato', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
   }
-}
 
   async checkPaymentStatus(requestId: string, provider: string = 'tochka') {
     if (provider === 'tochka') {
@@ -723,7 +722,7 @@ export class PaymentsService {
         .replace(/[^\x00-\x7FА-Яа-яЁё0-9.,;:\-'"() ]/g, '')
         .substring(0, 128);
 
-      const round2 = (n: number) => Math.round(n * 100) / 100;
+      const round2 = (n: number) => Number(n.toFixed(2)); // 100 ga ko'paytirish olib tashlandi
       const amount2 = round2(Number(payment.amount || 0));
 
       const paymentMethodCode = paymentMethod === 'full_prepayment' ? 1 : 4;
@@ -811,7 +810,7 @@ export class PaymentsService {
     const receiptId = uuidv4();
     const orderId = `order_${internalTransactionId}`;
     const payment = this.paymentRepository.create({
-      amount: amount,
+      amount: Number(amount.toFixed(2)), // Rubl sifatida saqlash
       transactionId: null,
       providerOperationId: internalTransactionId,
       status: 'pending',
@@ -848,12 +847,12 @@ export class PaymentsService {
         {
           order: {
             id: orderId,
-            amount: Number(amount.toFixed(2)) * 100,
+            amount: Number(amount.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
             prepaid_amount: 0,
             items: [
               {
                 name: 'Test Product',
-                price: Number(amount.toFixed(2)) * 100,
+                price: Number(amount.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
                 quantity: 1,
                 sku: `sku_test_${Date.now()}`,
                 unit: 'шт',
