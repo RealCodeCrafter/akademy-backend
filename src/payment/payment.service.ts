@@ -173,12 +173,12 @@ export class PaymentsService {
           {
             order: {
               id: orderId,
-              amount: Number(category.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+              amount: Number(category.price.toFixed(2)), 
               prepaid_amount: 0,
               items: [
                 {
                   name: course.name,
-                  price: Number(category.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+                  price: Number(category.price.toFixed(2)),
                   quantity: 1,
                   sku: `sku_${course.id}`,
                   unit: 'шт',
@@ -207,6 +207,8 @@ export class PaymentsService {
           },
         );
 
+        console.log(response);
+        
         const { link } = response.data;
         savedPayment.providerOperationId = orderId;
         await this.paymentRepository.save(savedPayment);
@@ -803,101 +805,119 @@ export class PaymentsService {
       return { ok: false, error: `sendReceiptToDigitalKassa fatal: ${outer?.message || outer}`, receiptId };
     }
   }
+async testDolyameOrder(
+  userId: number,
+  amount: number,
+  demoFlow: 'payment-success' | 'payment-fail' | 'reject' | null
+) {
+  const user = await this.usersService.findOne(userId);
+  if (!user) return { ok: false, error: 'Foydalanuvchi topilmadi' };
 
-  async testDolyameOrder(userId: number, amount: number, demoFlow: 'payment-success' | 'payment-fail' | 'reject' | null) {
-    const user = await this.usersService.findOne(userId);
-    if (!user) return { ok: false, error: 'Foydalanuvchi topilmadi' };
+  const internalTransactionId = `test_txn_${Date.now()}`;
+  const receiptId = uuidv4();
+  const orderId = `order_${internalTransactionId}`;
 
-    const internalTransactionId = `test_txn_${Date.now()}`;
-    const receiptId = uuidv4();
-    const orderId = `order_${internalTransactionId}`;
-    const payment = this.paymentRepository.create({
-      amount: Number(amount.toFixed(2)), // Rubl sifatida saqlash
-      transactionId: null,
-      providerOperationId: internalTransactionId,
-      status: 'pending',
-      provider: 'dolyame',
-      description: `Test order: ${orderId}`,
-      user,
-      receiptId,
-    });
-    const savedPayment: Payment = await this.paymentRepository.save(payment);
+  const payment = this.paymentRepository.create({
+    amount: Number(amount.toFixed(2)),
+    transactionId: null,
+    providerOperationId: internalTransactionId,
+    status: 'pending',
+    provider: 'dolyame',
+    description: `Test order: ${orderId}`,
+    user,
+    receiptId,
+  });
 
-    const dolyameLogin = this.configService.get<string>('DOLYAME_LOGIN');
-    const dolyamePassword = this.configService.get<string>('DOLYAME_PASSWORD');
-    const dolyameCertPath = this.configService.get<string>('DOLYAME_CERT_PATH');
-    const dolyameKeyPath = this.configService.get<string>('DOLYAME_KEY_PATH');
-    const dolyameApiUrl = this.configService.get<string>('DOLYAME_API_URL');
-    const dolyameNotificationUrl = this.configService.get<string>('DOLYAME_NOTIFICATION_URL');
-    const dolyameShopName = this.configService.get<string>('DOLYAME_SHOP_NAME');
-    const projectRoot = this.configService.get<string>('PROJECT_ROOT') || process.cwd();
+  const savedPayment: Payment = await this.paymentRepository.save(payment);
 
-    if (!dolyameLogin || !dolyamePassword || !dolyameCertPath || !dolyameKeyPath || !dolyameApiUrl) {
-      return { ok: false, error: 'Dolyame konfiguratsiyasi to‘liq emas' };
-    }
+  const dolyameLogin = this.configService.get<string>('DOLYAME_LOGIN');
+  const dolyamePassword = this.configService.get<string>('DOLYAME_PASSWORD');
+  const dolyameCertPath = this.configService.get<string>('DOLYAME_CERT_PATH');
+  const dolyameKeyPath = this.configService.get<string>('DOLYAME_KEY_PATH');
+  const dolyameApiUrl = this.configService.get<string>('DOLYAME_API_URL');
+  const dolyameNotificationUrl = this.configService.get<string>('DOLYAME_NOTIFICATION_URL');
+  const dolyameShopName = this.configService.get<string>('DOLYAME_SHOP_NAME');
+  const projectRoot = this.configService.get<string>('PROJECT_ROOT') || process.cwd();
 
-    try {
-      const certPath = path.join(projectRoot, dolyameCertPath);
-      const keyPath = path.join(projectRoot, dolyameKeyPath);
-      const cert = fs.readFileSync(certPath);
-      const key = fs.readFileSync(keyPath);
-      const httpsAgent = new https.Agent({ cert, key });
-
-      const correlationId = uuidv4();
-      const response = await axios.post(
-        `${dolyameApiUrl}/orders/create`,
-        {
-          order: {
-            id: orderId,
-            amount: Number(amount.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
-            prepaid_amount: 0,
-            items: [
-              {
-                name: 'Test Product',
-                price: Number(amount.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
-                quantity: 1,
-                sku: `sku_test_${Date.now()}`,
-                unit: 'шт',
-              },
-            ],
-          },
-          client_info: {
-            first_name: user.parentName || 'Client',
-            last_name: user.parentSurname || 'Unknown',
-            middle_name: user.parentName || '',
-            email: user.email || 'client@example.com',
-            phone: user.parentPhone || '+79999999999',
-            birthdate: user.studentBirthDate || '1990-01-01',
-          },
-          notification_url: dolyameNotificationUrl,
-          shop_name: dolyameShopName,
-          create_demo: demoFlow,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Basic ${Buffer.from(`${dolyameLogin}:${dolyamePassword}`).toString('base64')}`,
-            'X-Correlation-ID': correlationId,
-          },
-          httpsAgent,
-        },
-      );
-
-      const { payment_id, payment_url } = response.data;
-      savedPayment.transactionId = payment_id;
-      await this.paymentRepository.save(savedPayment);
-
-      return {
-        ok: true,
-        paymentUrl: payment_url,
-        paymentId: savedPayment.id,
-        transactionId: payment_id,
-        receiptId,
-        orderId,
-      };
-    } catch (err: any) {
-      this.logger.error(`Dolyame test order xatosi: ${err.response?.data?.message || err.message}`, err.stack);
-      return { ok: false, error: `Dolyame test order xatosi: ${err.response?.data?.message || err.message}` };
-    }
+  if (!dolyameLogin || !dolyamePassword || !dolyameCertPath || !dolyameKeyPath || !dolyameApiUrl) {
+    return { ok: false, error: 'Dolyame konfiguratsiyasi to‘liq emas' };
   }
+
+  try {
+    const certPath = path.join(projectRoot, dolyameCertPath);
+    const keyPath = path.join(projectRoot, dolyameKeyPath);
+    const cert = fs.readFileSync(certPath);
+    const key = fs.readFileSync(keyPath);
+    const httpsAgent = new https.Agent({ cert, key });
+
+    const normalizePhoneForDolyame = (phone?: string): string => {
+      if (!phone) return '+79999999999';
+      let digits = phone.replace(/\D/g, '');
+      if (digits.length === 11 && digits.startsWith('8')) digits = '7' + digits.slice(1);
+      if (digits.length === 10) digits = '7' + digits;
+      if (digits.length === 11 && digits.startsWith('7')) return '+' + digits;
+      return '+79999999999';
+    };
+
+    const correlationId = uuidv4();
+    const response = await axios.post(
+      `${dolyameApiUrl}/orders/create`,
+      {
+        order: {
+          id: orderId,
+          amount:  Number(amount.toFixed(2)), // 100 ga ko'paytirildi
+          prepaid_amount: 0,
+          items: [
+            {
+              name: 'Test Product',
+              price:  Number(amount.toFixed(2)), // 100 ga ko'paytirildi
+              quantity: 1,
+              sku: `sku_test_${Date.now()}`,
+              unit: 'шт',
+            },
+          ],
+        },
+        client_info: {
+          first_name: user.parentName || 'Client',
+          last_name: user.parentSurname || 'Unknown',
+          middle_name: user.parentName || '',
+          email: user.email || 'client@example.com',
+          phone: normalizePhoneForDolyame(user.parentPhone),
+          birthdate: user.studentBirthDate || '1990-01-01',
+        },
+        notification_url: dolyameNotificationUrl,
+        shop_name: dolyameShopName,
+        create_demo: demoFlow,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Basic ${Buffer.from(`${dolyameLogin}:${dolyamePassword}`).toString('base64')}`,
+          'X-Correlation-ID': correlationId,
+        },
+        httpsAgent,
+      },
+    );
+
+    const { payment_id, payment_url } = response.data;
+    savedPayment.transactionId = payment_id;
+    await this.paymentRepository.save(savedPayment);
+
+    return {
+      ok: true,
+      paymentUrl: payment_url,
+      paymentId: savedPayment.id,
+      transactionId: payment_id,
+      receiptId,
+      orderId,
+    };
+  } catch (err: any) {
+    this.logger.error(
+      `Dolyame test order xatosi: ${err.response?.data?.message || err.message}`,
+      err.stack
+    );
+    return { ok: false, error: `Dolyame test order xatosi: ${err.response?.data?.message || err.message}` };
+  }
+}
+
 }
