@@ -18,12 +18,10 @@ export class UsersController {
   }
 
   @Get()
-  async findAll(
-    @Query('page', new ParseIntPipe({ optional: true })) page = 1,
-    @Query('limit', new ParseIntPipe({ optional: true })) limit = 10,
-  ) {
-    return this.usersService.findAll(page, limit);
-  }
+async findAll() {
+  return this.usersService.findAll();
+}
+
 
   @Post('from-request/:requestId')
   createFromRequest(

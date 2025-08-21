@@ -93,39 +93,29 @@ export class UsersService {
     return { ...user, password: this.decryptPassword(user.password) };
   }
 
-  async findAll(page: number = 1, limit: number = 10) {
-    page = Number(page) || 1;
-    limit = Number(limit) || 10;
+  async findAll() {
+  const [users, total] = await this.usersRepository
+    .createQueryBuilder('user')
+    .leftJoinAndSelect('user.purchases', 'purchases')
+    .leftJoinAndSelect('user.requests', 'requests')
+    .leftJoinAndSelect('user.userCourses', 'userCourses')
+    .leftJoin('user.documents', 'documents')
+    .addSelect(['documents.id', 'documents.fileName'])
+    .where('user.role = :role', { role: 'user' })
+    .orderBy('user.createdAt', 'ASC')
+    .getManyAndCount(); // ❌ .skip().take() ishlatilmayapti
 
-    if (page < 1) page = 1;
-    if (limit < 1) limit = 10;
+  const data = users.map(user => ({
+    ...user,
+    password: this.decryptPassword(user.password),
+    documents: user.documents.map(doc => ({
+      id: doc.id,
+      fileName: doc.fileName,
+    })),
+  }));
 
-    const skip = (page - 1) * limit;
-
-    const [users, total] = await this.usersRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.purchases', 'purchases')
-      .leftJoinAndSelect('user.requests', 'requests')
-      .leftJoinAndSelect('user.userCourses', 'userCourses')
-      .leftJoin('user.documents', 'documents')
-      .addSelect(['documents.id', 'documents.fileName'])
-      .where('user.role = :role', { role: 'user' })
-      .orderBy('user.createdAt', 'ASC')
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
-
-    const data = users.map(user => ({
-      ...user,
-      password: this.decryptPassword(user.password),
-      documents: user.documents.map(doc => ({
-        id: doc.id,
-        fileName: doc.fileName,
-      })),
-    }));
-
-    return { data, total, page, limit };
-  }
+  return { data, total };
+}
 
   async findByUsername(username: string) {
     if (!username) throw new BadRequestException("Username bo'sh bo'lmasligi kerak");

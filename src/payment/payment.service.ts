@@ -899,13 +899,15 @@ async testDolyameOrder(
       },
     );
 
-    const { payment_id, payment_url } = response.data;
+    const { payment_id, link, status } = response.data;
     savedPayment.transactionId = payment_id;
     await this.paymentRepository.save(savedPayment);
 
+    
     return {
       ok: true,
-      paymentUrl: payment_url,
+      status: status,
+      paymentUrl: link,
       paymentId: savedPayment.id,
       transactionId: payment_id,
       receiptId,
