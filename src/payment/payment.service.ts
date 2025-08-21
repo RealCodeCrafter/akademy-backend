@@ -248,28 +248,30 @@ export class PaymentsService {
       const httpsAgent = new https.Agent({ cert, key });
 
       const correlationId = uuidv4();
-      const response = await axios.post(
-        `${dolyameApiUrl}/orders/${orderId}/commit`,
-        {
-          order: {
-            id: orderId,
-            amount: Number(Number(amount).toFixed(2)),// 100 ga ko'paytirish olib tashlandi
-            prepaid_amount: 0,
-            items: items.map(item => ({
-              ...item,
-              price: Number(Number(item.price).toFixed(2)), // 100 ga ko'paytirish olib tashlandi
-            })),
-          },
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Basic ${Buffer.from(`${dolyameLogin}:${dolyamePassword}`).toString('base64')}`,
-            'X-Correlation-ID': correlationId,
-          },
-          httpsAgent,
-        },
-      );
+    const response = await axios.post(
+  `${dolyameApiUrl}/orders/${orderId}/commit`,
+  {
+    id: orderId,
+    amount: Number(Number(amount).toFixed(2)),
+    prepaid_amount: 0,
+    items: items.map(item => ({
+      ...item,
+      price: Number(Number(item.price).toFixed(2)),
+    })),
+    fiscalization_settings: {
+      type: 'disabled',
+    },
+  },
+  {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Basic ${Buffer.from(`${dolyameLogin}:${dolyamePassword}`).toString('base64')}`,
+      'X-Correlation-ID': correlationId,
+    },
+    httpsAgent,
+  },
+);
+
 
       this.logger.log(`Dolyame commit muvaffaqiyatli: ${orderId}`);
       return { ok: true, data: response.data };
