@@ -253,11 +253,11 @@ export class PaymentsService {
         {
           order: {
             id: orderId,
-            amount: Number(amount.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+            amount: Number(Number(amount).toFixed(2)),// 100 ga ko'paytirish olib tashlandi
             prepaid_amount: 0,
             items: items.map(item => ({
               ...item,
-              price: Number(item.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+              price: Number(Number(item.price).toFixed(2)), // 100 ga ko'paytirish olib tashlandi
             })),
           },
         },
