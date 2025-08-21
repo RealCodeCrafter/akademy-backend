@@ -248,27 +248,18 @@ export class PaymentsService {
       const httpsAgent = new https.Agent({ cert, key });
 
       const correlationId = uuidv4();
-  const response = await axios.post(
-  `${dolyameApiUrl}/orders/create`,
+    const response = await axios.post(
+  `${dolyameApiUrl}/orders/${orderId}/commit`,
   {
-    order: {
-      id: orderId,
-      amount: Number(amount.toFixed(2)),
-      prepaid_amount: 0,
-      items: items.map(item => ({
-        ...item,
-        price: Number(item.price.toFixed(2)),
-      })),
-    },
-    client_info: {
-      first_name: "Ali",
-      last_name: "Valiyev",
-      phone: "+998901234567",
-      email: "ali@example.com",
-    },
-    settings: {
-      return_url: "https://mysite.uz/success",
-      fail_url: "https://mysite.uz/fail",
+    id: orderId,
+    amount: Number(Number(amount).toFixed(2)),
+    prepaid_amount: 0,
+    items: items.map(item => ({
+      ...item,
+      price: Number(Number(item.price).toFixed(2)),
+    })),
+    fiscalization_settings: {
+      type: 'disabled',
     },
   },
   {
@@ -278,7 +269,7 @@ export class PaymentsService {
       'X-Correlation-ID': correlationId,
     },
     httpsAgent,
-  }
+  },
 );
 
 
