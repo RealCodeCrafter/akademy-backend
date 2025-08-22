@@ -41,11 +41,11 @@ export class Payment {
   receiptId: string;
 
   @Column({ type: 'float', nullable: true })
-  residual_amount: number; // Dolyame uchun qolgan to'lov summasi
+  residual_amount: number;
 
   @Column({ type: 'json', nullable: true })
-  client_info: string; // Dolyame webhookdan kelgan mijoz ma'lumotlari
+  client_info: string
 
   @Column({ type: 'json', nullable: true })
-  payment_schedule: string; // Dolyame webhookdan kelgan to'lov jadvali
+  payment_schedule: string
 }
