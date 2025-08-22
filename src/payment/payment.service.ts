@@ -800,8 +800,8 @@ export class PaymentsService {
         items: [item],
         taxation,
         amount: {
-          cash: isRefund ? 0 : amount2,
-          cashless: isRefund ? amount2 : 0,
+          cash: isRefund ? 0 : 0,
+          cashless: isRefund ? amount2 : amount2,
           prepayment: 0,
           postpayment: 0,
           barter: 0,
