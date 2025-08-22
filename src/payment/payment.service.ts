@@ -1,4 +1,4 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus, Body, Req } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -32,41 +32,62 @@ export class PaymentsService {
     private configService: ConfigService,
   ) {}
 
+
   async startPayment(createPaymentDto: CreatePaymentDto, userId: number) {
     const user = await this.usersService.findOne(userId);
-    if (!user) return { ok: false, error: 'Foydalanuvchi topilmadi' };
+    if (!user) {
+      this.logger.warn(`Foydalanuvchi topilmadi: userId=${userId}`);
+      return { ok: false, error: 'Foydalanuvchi topilmadi' };
+    }
 
     const course = await this.coursesService.findOne(createPaymentDto.courseId);
-    if (!course) return { ok: false, error: 'Kurs topilmadi' };
+    if (!course) {
+      this.logger.warn(`Kurs topilmadi: courseId=${createPaymentDto.courseId}`);
+      return { ok: false, error: 'Kurs topilmadi' };
+    }
 
     const category = await this.categoryService.findOne(createPaymentDto.categoryId);
-    if (!category) return { ok: false, error: 'Kategoriya topilmadi' };
+    if (!category) {
+      this.logger.warn(`Kategoriya topilmadi: categoryId=${createPaymentDto.categoryId}`);
+      return { ok: false, error: 'Kategoriya topilmadi' };
+    }
 
     if (!course.categories?.some((cat) => cat.id === category.id)) {
+      this.logger.warn(`Kategoriya kursga tegishli emas: courseId=${createPaymentDto.courseId}, categoryId=${createPaymentDto.categoryId}`);
       return { ok: false, error: 'Kategoriya ushbu kursga tegishli emas' };
     }
 
     let degree = category.name;
     if (createPaymentDto.levelId) {
       const level = await this.levelService.findOne(createPaymentDto.levelId);
-      if (!level) return { ok: false, error: 'Daraja topilmadi' };
+      if (!level) {
+        this.logger.warn(`Daraja topilmadi: levelId=${createPaymentDto.levelId}`);
+        return { ok: false, error: 'Daraja topilmadi' };
+      }
       const isLinked = await this.categoryService.isLevelLinkedToCategory(
         createPaymentDto.categoryId,
         createPaymentDto.levelId,
       );
-      if (!isLinked) return { ok: false, error: 'Daraja ushbu kategoriya uchun emas' };
+      if (!isLinked) {
+        this.logger.warn(`Daraja kategoriyaga mos emas: levelId=${createPaymentDto.levelId}, categoryId=${createPaymentDto.categoryId}`);
+        return { ok: false, error: 'Daraja ushbu kategoriya uchun emas' };
+      }
       degree = level.name;
     }
 
     const purchase = await this.purchasesService.create(createPaymentDto, userId);
-    if (!purchase?.id) return { ok: false, error: 'Xarid ID noto‘g‘ri' };
+    if (!purchase?.id) {
+      this.logger.error(`Xarid yaratishda xato: purchaseId yo'q`);
+      return { ok: false, error: 'Xarid ID noto‘g‘ri' };
+    }
 
     const internalTransactionId = `txn_${Date.now()}`;
     const receiptId = uuidv4();
+    const orderId = `order_${internalTransactionId}`;
     const payment = this.paymentRepository.create({
-      amount: Number(category.price.toFixed(2)), // Rubl sifatida saqlash
-      transactionId: null,
-      providerOperationId: internalTransactionId,
+      amount: Number(category.price.toFixed(2)),
+      transactionId: orderId, // Webhook'da orderId ishlatiladi
+      providerOperationId: orderId,
       status: 'pending',
       provider: createPaymentDto.method || 'tochka',
       description: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
@@ -75,7 +96,15 @@ export class PaymentsService {
       purchase,
       receiptId,
     });
-    const savedPayment: Payment = await this.paymentRepository.save(payment);
+
+    let savedPayment: Payment;
+    try {
+      savedPayment = await this.paymentRepository.save(payment);
+      this.logger.log(`Payment yaratildi: paymentId=${savedPayment.id}, orderId=${orderId}`);
+    } catch (err) {
+      this.logger.error(`Payment saqlashda xato: ${err.message}`, err.stack);
+      return { ok: false, error: `Payment saqlashda xato: ${err.message}` };
+    }
 
     if (savedPayment.provider === 'tochka') {
       const tochkaApiUrl = this.configService.get<string>('TOCHKA_PAYMENT_URL') || 'https://enter.tochka.com/uapi/acquiring/v1.0/payments';
@@ -94,7 +123,7 @@ export class PaymentsService {
           {
             Data: {
               customerCode: tochkaCustomerCode,
-              amount: Number(category.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+              amount: Number(category.price.toFixed(2)),
               purpose: `Курс: ${course.name}, Категория: ${category.name}, Уровень: ${degree}`,
               paymentMode: ['card'],
               saveCard: false,
@@ -114,7 +143,13 @@ export class PaymentsService {
 
         const { paymentLink, operationId } = response.data.Data;
         savedPayment.transactionId = operationId;
-        await this.paymentRepository.save(savedPayment);
+        try {
+          await this.paymentRepository.save(savedPayment);
+          this.logger.log(`Tochka payment saqlandi: transactionId=${operationId}, paymentId=${savedPayment.id}`);
+        } catch (err) {
+          this.logger.error(`Tochka payment saqlashda xato: ${err.message}`, err.stack);
+          return { ok: false, error: `Tochka payment saqlashda xato: ${err.message}` };
+        }
 
         return {
           ok: true,
@@ -135,24 +170,34 @@ export class PaymentsService {
       const dolyamePassword = this.configService.get<string>('DOLYAME_PASSWORD');
       const dolyameCertPath = this.configService.get<string>('DOLYAME_CERT_PATH');
       const dolyameKeyPath = this.configService.get<string>('DOLYAME_KEY_PATH');
-      const dolyameApiUrl = this.configService.get<string>('DOLYAME_API_URL');
+      const dolyameApiUrl = this.configService.get<string>('DOLYAME_API_URL') || 'https://partner.dolyame.ru/v1';
       const dolyameNotificationUrl = this.configService.get<string>('DOLYAME_NOTIFICATION_URL');
-      const dolyameShopName = this.configService.get<string>('DOLYAME_SHOP_NAME');
+      const dolyameShopName = this.configService.get<string>('DOLYAME_SHOP_NAME') || 'A+ Academy';
       const projectRoot = this.configService.get<string>('PROJECT_ROOT') || process.cwd();
 
-      if (!dolyameLogin || !dolyamePassword || !dolyameCertPath || !dolyameKeyPath || !dolyameApiUrl) {
+      if (!dolyameLogin || !dolyamePassword || !dolyameCertPath || !dolyameKeyPath || !dolyameApiUrl || !dolyameNotificationUrl) {
+        this.logger.error('Dolyame konfiguratsiyasi to‘liq emas');
         return { ok: false, error: 'Dolyame konfiguratsiyasi to‘liq emas' };
       }
 
       try {
         const certPath = path.join(projectRoot, dolyameCertPath);
         const keyPath = path.join(projectRoot, dolyameKeyPath);
-        const cert = fs.readFileSync(certPath);
-        const key = fs.readFileSync(keyPath);
+        let cert, key;
+        try {
+          cert = fs.readFileSync(certPath);
+          key = fs.readFileSync(keyPath);
+        } catch (err) {
+          this.logger.error(`Sertifikat yoki kalit faylini o'qishda xato: certPath=${certPath}, keyPath=${keyPath}, xato: ${err.message}`);
+          return { ok: false, error: `Sertifikat yoki kalit faylini o'qishda xato: ${err.message}` };
+        }
         const httpsAgent = new https.Agent({ cert, key });
 
         const normalizePhoneForDolyame = (phone?: string): string => {
-          if (!phone) return '+79999999999';
+          if (!phone || phone.replace(/\D/g, '').length < 10) {
+            this.logger.warn(`Noto'g'ri telefon raqami: ${phone}, default +79999999999 ishlatiladi`);
+            return '+79999999999';
+          }
           let digits = phone.replace(/\D/g, '');
           if (digits.length === 11 && digits.startsWith('8')) {
             digits = '7' + digits.slice(1);
@@ -163,40 +208,42 @@ export class PaymentsService {
           if (digits.length === 11 && digits.startsWith('7')) {
             return '+' + digits;
           }
+          this.logger.warn(`Noto'g'ri telefon raqami formati: ${phone}, default +79999999999 ishlatiladi`);
           return '+79999999999';
         };
 
-        const orderId = `order_${internalTransactionId}`;
         const correlationId = uuidv4();
+        const requestBody = {
+          order: {
+            id: orderId,
+            amount: Number(category.price.toFixed(2)),
+            prepaid_amount: 0,
+            items: [
+              {
+                name: course.name.substring(0, 128),
+                price: Number(category.price.toFixed(2)),
+                quantity: 1,
+                sku: `sku_${course.id}`,
+                unit: 'шт',
+              },
+            ],
+          },
+          client_info: {
+            first_name: (user.parentName || 'Client').substring(0, 64),
+            last_name: (user.studentName || 'Unknown').substring(0, 64),
+            middle_name: (user.studentSurname || '').substring(0, 64),
+            email: user.email || 'client@example.com',
+            phone: normalizePhoneForDolyame(user.parentPhone),
+            birthdate: user.studentBirthDate || '1990-01-01',
+          },
+          notification_url: dolyameNotificationUrl,
+          shop_name: dolyameShopName,
+        };
+
+        this.logger.log(`Dolyame so'rov tanasi: ${JSON.stringify(requestBody, null, 2)}`);
         const response = await axios.post(
           `${dolyameApiUrl}/orders/create`,
-          {
-            order: {
-              id: orderId,
-              amount: Number(category.price.toFixed(2)), 
-              prepaid_amount: 0,
-              items: [
-                {
-                  name: course.name,
-                  price: Number(category.price.toFixed(2)),
-                  quantity: 1,
-                  sku: `sku_${course.id}`,
-                  unit: 'шт',
-                },
-              ],
-            },
-            client_info: {
-              first_name: user.parentName || 'Client',
-              last_name: user.studentName || 'Unknown',
-              middle_name: user.studentSurname || '',
-              email: user.email || 'client@example.com',
-              phone: normalizePhoneForDolyame(user.parentPhone),
-              birthdate: user.studentBirthDate || '1990-01-01',
-            },
-            notification_url: dolyameNotificationUrl,
-            shop_name: dolyameShopName,
-            create_demo: createPaymentDto.demoFlow || null,
-          },
+          requestBody,
           {
             headers: {
               'Content-Type': 'application/json',
@@ -207,11 +254,27 @@ export class PaymentsService {
           },
         );
 
-        console.log(response);
-        
-        const { link } = response.data;
+        this.logger.log(`Dolyame API javobi: ${JSON.stringify(response.data, null, 2)}`);
+        const { link, status } = response.data;
+        if (!link) {
+          this.logger.error(`Dolyame API javobida link topilmadi: response=${JSON.stringify(response.data, null, 2)}`);
+          return {
+            ok: false,
+            error: `Dolyame API javobida link topilmadi: status=${status || 'noma\'lum'}`,
+            orderId,
+            response: response.data,
+          };
+        }
+
+        savedPayment.transactionId = orderId; // Webhook'da orderId ishlatiladi
         savedPayment.providerOperationId = orderId;
-        await this.paymentRepository.save(savedPayment);
+        try {
+          await this.paymentRepository.save(savedPayment);
+          this.logger.log(`Dolyame payment saqlandi: transactionId=${orderId}, orderId=${orderId}, paymentId=${savedPayment.id}`);
+        } catch (err) {
+          this.logger.error(`Dolyame payment saqlashda xato: ${err.message}`, err.stack);
+          return { ok: false, error: `Dolyame payment saqlashda xato: ${err.message}` };
+        }
 
         return {
           ok: true,
@@ -220,13 +283,15 @@ export class PaymentsService {
           purchaseId: purchase.id,
           transactionId: orderId,
           receiptId,
+          orderId,
         };
       } catch (err: any) {
-        this.logger.error(`Dolyame xatosi: ${err.response?.data?.message || err.message}`, err.stack);
+        this.logger.error(`Dolyame xatosi: ${err.response?.data?.message || err.message}, response=${JSON.stringify(err.response?.data, null, 2)}`, err.stack);
         return { ok: false, error: `Dolyame xatosi: ${err.response?.data?.message || err.message}` };
       }
     }
 
+    this.logger.warn(`Noma'lum to'lov usuli: ${savedPayment.provider}`);
     return { ok: false, error: 'Noma’lum to‘lov usuli' };
   }
 
@@ -250,30 +315,29 @@ export class PaymentsService {
       const httpsAgent = new https.Agent({ cert, key });
 
       const correlationId = uuidv4();
-    const response = await axios.post(
-  `${dolyameApiUrl}/orders/${orderId}/commit`,
-  {
-    id: orderId,
-    amount: Number(Number(amount).toFixed(2)),
-    prepaid_amount: 0,
-    items: items.map(item => ({
-      ...item,
-      price: Number(Number(item.price).toFixed(2)),
-    })),
-    fiscalization_settings: {
-      type: 'disabled',
-    },
-  },
-  {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${Buffer.from(`${dolyameLogin}:${dolyamePassword}`).toString('base64')}`,
-      'X-Correlation-ID': correlationId,
-    },
-    httpsAgent,
-  },
-);
-
+      const response = await axios.post(
+        `${dolyameApiUrl}/orders/${orderId}/commit`,
+        {
+          id: orderId,
+          amount: Number(amount.toFixed(2)), // Rubl sifatida
+          prepaid_amount: 0,
+          items: items.map(item => ({
+            ...item,
+            price: Number(item.price.toFixed(2)), // Rubl sifatida
+          })),
+          fiscalization_settings: {
+            type: 'disabled',
+          },
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Basic ${Buffer.from(`${dolyameLogin}:${dolyamePassword}`).toString('base64')}`,
+            'X-Correlation-ID': correlationId,
+          },
+          httpsAgent,
+        },
+      );
 
       this.logger.log(`Dolyame commit muvaffaqiyatli: ${orderId}`);
       return { ok: true, data: response.data };
@@ -347,11 +411,11 @@ export class PaymentsService {
       const response = await axios.post(
         `${dolyameApiUrl}/orders/${orderId}/refund`,
         {
-          amount: Number(amount.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+          amount: Number(amount.toFixed(2)), // Rubl sifatida
           refunded_prepaid_amount: 0,
           returned_items: items.map(item => ({
             ...item,
-            price: Number(item.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+            price: Number(item.price.toFixed(2)), // Rubl sifatida
           })),
         },
         {
@@ -436,11 +500,11 @@ export class PaymentsService {
         {
           order: {
             id: orderId,
-            amount: Number(amount.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+            amount: Number(amount.toFixed(2)), // Rubl sifatida
             prepaid_amount: 0,
             items: items.map(item => ({
               ...item,
-              price: Number(item.price.toFixed(2)), // 100 ga ko'paytirish olib tashlandi
+              price: Number(item.price.toFixed(2)), // Rubl sifatida
             })),
           },
         },
@@ -461,6 +525,103 @@ export class PaymentsService {
       return { ok: false, error: `Dolyame complete delivery xatosi: ${err.response?.data?.message || err.message}` };
     }
   }
+
+  async handleDolyameWebhook(@Body() body: any, @Req() req: any) {
+  this.logger.log(`Webhook raw body type: ${typeof body}, data: ${JSON.stringify(body)}`);
+
+  // 🔹 Ba’zi hollarda body string bo‘lib keladi, uni JSON.parse qilamiz
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch (e) {
+      this.logger.error(`Webhook JSON parse error: ${e.message}`);
+      throw new HttpException('Invalid JSON body', HttpStatus.BAD_REQUEST);
+    }
+  }
+
+  // 🔹 Kerakli maydonlarni ajratib olamiz
+  const { id, payment_id, status, amount, residual_amount, client_info, payment_schedule } = body;
+  const realId = (id || payment_id) ? String(id || payment_id) : null;
+
+  // 🔹 Majburiy maydonlar tekshiruvi
+  if (!realId || !status) {
+    this.logger.warn(`Noto'g'ri webhook ma'lumotlari: ${JSON.stringify(body)}`);
+    throw new HttpException('Notogri webhook malumotlari', HttpStatus.BAD_REQUEST);
+  }
+
+  // 🔹 DB’dan transactionId orqali paymentni topamiz
+  const payment = await this.paymentRepository.findOne({
+    where: { transactionId: realId, provider: 'dolyame' },
+    relations: ['purchase'],
+  });
+
+  if (!payment) {
+    this.logger.warn(`Payment topilmadi: ${realId}`);
+    return { ok: true, error: `Payment topilmadi: ${realId}` };
+  }
+
+  // 🔹 Ruxsat etilgan statuslar ro‘yxati
+  const validStatuses = [
+    'approved',
+    'rejected',
+    'canceled',
+    'committed',
+    'wait_for_commit',
+    'completed',
+  ];
+
+  if (!validStatuses.includes(status)) {
+    this.logger.warn(`Noto'g'ri status: ${status}`);
+    throw new HttpException('Notogri status', HttpStatus.BAD_REQUEST);
+  }
+
+  try {
+    // 🔹 Status mapping
+    payment.status = (status === 'rejected' || status === 'canceled') ? 'failed' : status;
+
+    // 🔹 Summalarni yozib qo‘yamiz
+    if (amount !== undefined) {
+      payment.amount = Number(amount);
+    }
+    if (residual_amount !== undefined) {
+      payment['residual_amount'] = Number(residual_amount);
+    }
+
+    // 🔹 Qo‘shimcha ma’lumotlarni yozib qo‘yamiz
+    if (client_info) {
+      payment['client_info'] = JSON.stringify(client_info);
+    }
+    if (payment_schedule) {
+      payment['payment_schedule'] = JSON.stringify(payment_schedule);
+    }
+
+    await this.paymentRepository.save(payment);
+
+    // 🔹 Agar payment to‘liq yakunlangan bo‘lsa – purchase ni tasdiqlaymiz va chek yuboramiz
+    if (status === 'completed') {
+      await this.purchasesService.confirmPurchase(payment.purchaseId);
+
+      const digitalKassaResult = await this.sendReceiptToDigitalKassa(
+        payment,
+        'full_payment',
+        false,
+        payment.receiptId,
+      );
+
+      if (!digitalKassaResult.ok) {
+        this.logger.warn(`Digital Kassa xatosi: ${digitalKassaResult.error}`);
+      }
+    }
+
+    this.logger.log(`Webhook muvaffaqiyatli qayta ishlandi: ${realId}, status: ${status}`);
+    return { ok: true, paymentId: realId };
+
+  } catch (error) {
+    this.logger.error(`Webhookni qayta ishlashda xato: ${error.message}`, error.stack);
+    throw new HttpException('Webhookni qayta ishlashda xato', HttpStatus.INTERNAL_SERVER_ERROR);
+  }
+}
+
 
   async handleTochkaWebhook(rawBody: any, contentType: string) {
     if (!rawBody) {
@@ -543,55 +704,6 @@ export class PaymentsService {
     return { ok: true };
   }
 
-  async handleDolyameWebhook(body: any, req: any) {
-    const { payment_id, status, amount, residual_amount, client_info, payment_schedule } = body;
-    if (!payment_id || !status) {
-      this.logger.warn(`Noto'g'ri webhook ma'lumotlari: ${JSON.stringify(body)}`);
-      throw new HttpException('Notogri webhook malumotlari', HttpStatus.BAD_REQUEST);
-    }
-
-    const payment = await this.paymentRepository.findOne({
-      where: { providerOperationId: payment_id, provider: 'dolyame' },
-      relations: ['purchase'],
-    });
-
-    if (!payment) {
-      this.logger.warn(`Payment topilmadi: ${payment_id}`);
-      return { ok: true, error: `Payment topilmadi: ${payment_id}` };
-    }
-
-    const validStatuses = ['approved', 'rejected', 'canceled', 'committed', 'wait_for_commit', 'completed'];
-    if (!validStatuses.includes(status)) {
-      this.logger.warn(`Noto'g'ri status: ${status}`);
-      throw new HttpException('Notogri status', HttpStatus.BAD_REQUEST);
-    }
-
-    try {
-      payment.status = status === 'rejected' || status === 'canceled' ? 'failed' : status;
-      payment.amount = Number(amount.toFixed(2)); // 100 ga bo'lish olib tashlandi
-      if (residual_amount !== undefined) {
-        payment['residual_amount'] = Number(residual_amount.toFixed(2)); // 100 ga bo'lish olib tashlandi
-      }
-      if (client_info) {
-        payment['client_info'] = JSON.stringify(client_info);
-      }
-      if (payment_schedule) {
-        payment['payment_schedule'] = JSON.stringify(payment_schedule);
-      }
-      await this.paymentRepository.save(payment);
-
-      if (status === 'completed') {
-        await this.purchasesService.confirmPurchase(payment.purchaseId);
-      }
-
-      this.logger.log(`Webhook muvaffaqiyatli qayta ishlandi: ${payment_id}, status: ${status}`);
-      return { ok: true, paymentId: payment_id };
-    } catch (error) {
-      this.logger.error(`Webhookni qayta ishlashda xato: ${error.message}`, error.stack);
-      throw new HttpException('Webhookni qayta ishlashda xato', HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
   async checkPaymentStatus(requestId: string, provider: string = 'tochka') {
     if (provider === 'tochka') {
       const tochkaJwtToken = this.configService.get<string>('TOCHKA_JWT_TOKEN');
@@ -625,66 +737,6 @@ export class PaymentsService {
     } catch (e) {
       this.logger.warn(`IP tekshirishda xato: ${ip}`, e.stack);
       return false;
-    }
-  }
-
-  async openShift() {
-    const apiUrl = this.configService.get<string>('DIGITAL_KASSA_API_URL') || 'https://api.digitalkassa.ru/v2.1';
-    const groupId = Number(this.configService.get<string>('DIGITAL_KASSA_GROUP_ID') || 3190);
-    const actor = this.configService.get<string>('DIGITAL_KASSA_ACTOR') || 'Malakhova_A_S';
-    const token = this.configService.get<string>('DIGITAL_KASSA_TOKEN') || '07uJ=$!nPFmUT9n68b2*';
-    const kktAddress = this.configService.get<string>('DIGITAL_KASSA_KKT_ADDRESS') || 'г. Брянск, ул. Крахмалёва, д.55';
-    const kktPlace = this.configService.get<string>('DIGITAL_KASSA_KKT_PLACE') || 'A+ ACADEMY';
-
-    try {
-      const response = await axios.post(
-        `${apiUrl}/c_groups/${groupId}/shifts/open`,
-        {
-          address: kktAddress,
-          place: kktPlace,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json; charset=utf-8',
-            Authorization: `Basic ${Buffer.from(`${actor}:${token}`).toString('base64')}`,
-          },
-        },
-      );
-      this.logger.log(`Smenani ochish muvaffaqiyatli: ${JSON.stringify(response.data)}`);
-      return { ok: true, data: response.data };
-    } catch (err: any) {
-      this.logger.error(`Smenani ochishda xato: ${err.response?.data?.message || err.message}`);
-      return { ok: false, error: `Smenani ochishda xato: ${err.response?.data?.message || err.message}` };
-    }
-  }
-
-  async closeShift() {
-    const apiUrl = this.configService.get<string>('DIGITAL_KASSA_API_URL') || 'https://api.digitalkassa.ru/v2.1';
-    const groupId = Number(this.configService.get<string>('DIGITAL_KASSA_GROUP_ID') || 3190);
-    const actor = this.configService.get<string>('DIGITAL_KASSA_ACTOR') || 'Malakhova_A_S';
-    const token = this.configService.get<string>('DIGITAL_KASSA_TOKEN') || '07uJ=$!nPFmUT9n68b2*';
-    const kktAddress = this.configService.get<string>('DIGITAL_KASSA_KKT_ADDRESS') || 'г. Брянск, ул. Крахмалёва, д.55';
-    const kktPlace = this.configService.get<string>('DIGITAL_KASSA_KKT_PLACE') || 'A+ ACADEMY';
-
-    try {
-      const response = await axios.post(
-        `${apiUrl}/c_groups/${groupId}/shifts/close`,
-        {
-          address: kktAddress,
-          place: kktPlace,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json; charset=utf-8',
-            Authorization: `Basic ${Buffer.from(`${actor}:${token}`).toString('base64')}`,
-          },
-        },
-      );
-      this.logger.log(`Smenani yopish muvaffaqiyatli: ${JSON.stringify(response.data)}`);
-      return { ok: true, data: response.data };
-    } catch (err: any) {
-      this.logger.error(`Smenani yopishda xato: ${err.response?.data?.message || err.message}`);
-      return { ok: false, error: `Smenani yopishda xato: ${err.response?.data?.message || err.message}` };
     }
   }
 
@@ -726,7 +778,7 @@ export class PaymentsService {
         .replace(/[^\x00-\x7FА-Яа-яЁё0-9.,;:\-'"() ]/g, '')
         .substring(0, 128);
 
-      const round2 = (n: number) => Number(n.toFixed(2)); // 100 ga ko'paytirish olib tashlandi
+      const round2 = (n: number) => Number(n.toFixed(2)); // Rubl sifatida
       const amount2 = round2(Number(payment.amount || 0));
 
       const paymentMethodCode = paymentMethod === 'full_prepayment' ? 1 : 4;
@@ -805,121 +857,4 @@ export class PaymentsService {
       return { ok: false, error: `sendReceiptToDigitalKassa fatal: ${outer?.message || outer}`, receiptId };
     }
   }
-async testDolyameOrder(
-  userId: number,
-  amount: number,
-  demoFlow: 'payment-success' | 'payment-fail' | 'reject' | null
-) {
-  const user = await this.usersService.findOne(userId);
-  if (!user) return { ok: false, error: 'Foydalanuvchi topilmadi' };
-
-  const internalTransactionId = `test_txn_${Date.now()}`;
-  const receiptId = uuidv4();
-  const orderId = `order_${internalTransactionId}`;
-
-  const payment = this.paymentRepository.create({
-    amount: Number(amount.toFixed(2)),
-    transactionId: null,
-    providerOperationId: internalTransactionId,
-    status: 'pending',
-    provider: 'dolyame',
-    description: `Test order: ${orderId}`,
-    user,
-    receiptId,
-  });
-
-  const savedPayment: Payment = await this.paymentRepository.save(payment);
-
-  const dolyameLogin = this.configService.get<string>('DOLYAME_LOGIN');
-  const dolyamePassword = this.configService.get<string>('DOLYAME_PASSWORD');
-  const dolyameCertPath = this.configService.get<string>('DOLYAME_CERT_PATH');
-  const dolyameKeyPath = this.configService.get<string>('DOLYAME_KEY_PATH');
-  const dolyameApiUrl = this.configService.get<string>('DOLYAME_API_URL');
-  const dolyameNotificationUrl = this.configService.get<string>('DOLYAME_NOTIFICATION_URL');
-  const dolyameShopName = this.configService.get<string>('DOLYAME_SHOP_NAME');
-  const projectRoot = this.configService.get<string>('PROJECT_ROOT') || process.cwd();
-
-  if (!dolyameLogin || !dolyamePassword || !dolyameCertPath || !dolyameKeyPath || !dolyameApiUrl) {
-    return { ok: false, error: 'Dolyame konfiguratsiyasi to‘liq emas' };
-  }
-
-  try {
-    const certPath = path.join(projectRoot, dolyameCertPath);
-    const keyPath = path.join(projectRoot, dolyameKeyPath);
-    const cert = fs.readFileSync(certPath);
-    const key = fs.readFileSync(keyPath);
-    const httpsAgent = new https.Agent({ cert, key });
-
-    const normalizePhoneForDolyame = (phone?: string): string => {
-      if (!phone) return '+79999999999';
-      let digits = phone.replace(/\D/g, '');
-      if (digits.length === 11 && digits.startsWith('8')) digits = '7' + digits.slice(1);
-      if (digits.length === 10) digits = '7' + digits;
-      if (digits.length === 11 && digits.startsWith('7')) return '+' + digits;
-      return '+79999999999';
-    };
-
-    const correlationId = uuidv4();
-    const response = await axios.post(
-      `${dolyameApiUrl}/orders/create`,
-      {
-        order: {
-          id: orderId,
-          amount:  Number(amount.toFixed(2)), // 100 ga ko'paytirildi
-          prepaid_amount: 0,
-          items: [
-            {
-              name: 'Test Product',
-              price:  Number(amount.toFixed(2)), // 100 ga ko'paytirildi
-              quantity: 1,
-              sku: `sku_test_${Date.now()}`,
-              unit: 'шт',
-            },
-          ],
-        },
-        client_info: {
-          first_name: user.parentName || 'Client',
-          last_name: user.parentSurname || 'Unknown',
-          middle_name: user.parentName || '',
-          email: user.email || 'client@example.com',
-          phone: normalizePhoneForDolyame(user.parentPhone),
-          birthdate: user.studentBirthDate || '1990-01-01',
-        },
-        notification_url: dolyameNotificationUrl,
-        shop_name: dolyameShopName,
-        create_demo: demoFlow,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Basic ${Buffer.from(`${dolyameLogin}:${dolyamePassword}`).toString('base64')}`,
-          'X-Correlation-ID': correlationId,
-        },
-        httpsAgent,
-      },
-    );
-
-    const { payment_id, link, status } = response.data;
-    savedPayment.transactionId = payment_id;
-    await this.paymentRepository.save(savedPayment);
-
-    
-    return {
-      ok: true,
-      status: status,
-      paymentUrl: link,
-      paymentId: savedPayment.id,
-      transactionId: payment_id,
-      receiptId,
-      orderId,
-    };
-  } catch (err: any) {
-    this.logger.error(
-      `Dolyame test order xatosi: ${err.response?.data?.message || err.message}`,
-      err.stack
-    );
-    return { ok: false, error: `Dolyame test order xatosi: ${err.response?.data?.message || err.message}` };
-  }
-}
-
 }

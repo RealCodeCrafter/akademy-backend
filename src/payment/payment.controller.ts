@@ -1,4 +1,3 @@
-
 import { Controller, Post, Body, Req, UseGuards, HttpCode, All, Get, Param, HttpException, HttpStatus } from '@nestjs/common';
 import { PaymentsService } from './payment.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -7,12 +6,6 @@ import { Request } from 'express';
 
 interface AuthenticatedRequest extends Request {
   user?: { sub: number; username: string; role: string };
-}
-
-interface TestDolyameDto {
-  userId: number;
-  amount: number;
-  demoFlow?: 'payment-success' | 'payment-fail' | 'reject';
 }
 
 @Controller('payments')
@@ -25,18 +18,6 @@ export class PaymentsController {
     const userId = req.user?.sub;
     if (!userId) throw new HttpException('Foydalanuvchi aniqlanmadi', HttpStatus.UNAUTHORIZED);
     return this.paymentsService.startPayment(createPaymentDto, userId);
-  }
-
-  @UseGuards(AuthGuard)
-  @Post('test-dolyame')
-  async testDolyame(@Body() testDolyameDto: TestDolyameDto, @Req() req: AuthenticatedRequest) {
-    const userId = req.user?.sub;
-    if (!userId) throw new HttpException('Foydalanuvchi aniqlanmadi', HttpStatus.UNAUTHORIZED);
-    return this.paymentsService.testDolyameOrder(
-      testDolyameDto.userId,
-      testDolyameDto.amount,
-      testDolyameDto.demoFlow || null,
-    );
   }
 
   @UseGuards(AuthGuard)

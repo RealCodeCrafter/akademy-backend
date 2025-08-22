@@ -17,10 +17,10 @@ export class UsersController {
     return this.usersService.createAdminUser(createUserDto);
   }
 
-  @Get()
-async findAll() {
-  return this.usersService.findAll();
-}
+      @Get()
+    async findAll() {
+      return this.usersService.findAll();
+    }
 
 
   @Post('from-request/:requestId')

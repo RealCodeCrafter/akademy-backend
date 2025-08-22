@@ -5,12 +5,6 @@ export enum PaymentMethod {
   DOLYAME = 'dolyame',
 }
 
-export enum DolyameDemoFlow {
-  PAYMENT_SUCCESS = 'payment-success',
-  PAYMENT_FAIL = 'payment-fail',
-  REJECT = 'reject',
-}
-
 export class CreatePaymentDto {
   @IsInt()
   courseId: number;
@@ -25,8 +19,4 @@ export class CreatePaymentDto {
   @IsOptional()
   @IsEnum(PaymentMethod)
   method?: PaymentMethod;
-
-  @IsOptional()
-  @IsEnum(DolyameDemoFlow)
-  demoFlow?: DolyameDemoFlow;
 }
