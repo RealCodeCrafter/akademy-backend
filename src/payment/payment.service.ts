@@ -525,7 +525,7 @@ export class PaymentsService {
       return { ok: false, error: `Dolyame complete delivery xatosi: ${err.response?.data?.message || err.message}` };
     }
   }
-
+  
   async handleDolyameWebhook(@Body() body: any, @Req() req: any) {
   this.logger.log(`Dolyame webhook raw: ${typeof body}, data: ${JSON.stringify(body)}`);
 
@@ -533,7 +533,7 @@ export class PaymentsService {
   if (typeof body === 'string') {
     try {
       body = JSON.parse(body);
-    } catch (e) {
+    } catch (e: any) {
       this.logger.error(`Webhook JSON parse error: ${e.message}`);
       throw new HttpException('Invalid JSON body', HttpStatus.BAD_REQUEST);
     }
@@ -541,26 +541,34 @@ export class PaymentsService {
 
   // 🔹 Kerakli maydonlarni ajratib olamiz
   const { id, payment_id, status, amount, residual_amount, client_info, payment_schedule } = body;
-  const realId = (id || payment_id) ? String(id || payment_id) : null;
 
-  if (!realId || !status) {
+  // 🔹 ID yoki payment_id har qanday formatda string va number bo‘lishi mumkin
+  const idsToCheck = [id, payment_id].filter(Boolean);
+
+  if (!idsToCheck.length || !status) {
     this.logger.warn(`Noto‘g‘ri webhook ma’lumotlari: ${JSON.stringify(body)}`);
     throw new HttpException('Notogri webhook malumotlari', HttpStatus.BAD_REQUEST);
   }
 
-  // 🔹 DB’dan paymentni qidiramiz (id ham, payment_id ham tekshiramiz)
-  const payment = await this.paymentRepository.findOne({
-    where: [
-      { transactionId: realId, provider: 'dolyame' },
-      { providerOperationId: realId, provider: 'dolyame' },
-      { id: Number(realId), provider: 'dolyame' }, // agar DB id bo‘lsa
-    ],
-    relations: ['purchase'],
-  });
+  let payment: Payment | null = null;
+
+  // 🔹 DB’dan id va payment_id bo‘yicha qidiramiz
+  for (const realId of idsToCheck) {
+    payment = await this.paymentRepository.findOne({
+      where: [
+        { transactionId: String(realId), provider: 'dolyame' },
+        { providerOperationId: String(realId), provider: 'dolyame' },
+        { id: Number(realId), provider: 'dolyame' },
+      ],
+      relations: ['purchase'],
+    });
+
+    if (payment) break;
+  }
 
   if (!payment) {
-    this.logger.warn(`Payment topilmadi: ${realId}`);
-    return { ok: true, error: `Payment topilmadi: ${realId}` };
+    this.logger.warn(`Payment topilmadi: ${idsToCheck.join(', ')}`);
+    return { ok: true, error: `Payment topilmadi: ${idsToCheck.join(', ')}` };
   }
 
   // 🔹 Ruxsat etilgan statuslar
@@ -588,32 +596,23 @@ export class PaymentsService {
         : status;
 
     // 🔹 Summalar
-    if (amount !== undefined) {
-      payment.amount = Number(amount);
-    }
-    if (residual_amount !== undefined) {
-      payment['residual_amount'] = Number(residual_amount);
-    }
+    if (amount !== undefined) payment.amount = Number(amount);
+    if (residual_amount !== undefined) payment.residual_amount = Number(residual_amount);
 
     // 🔹 Qo‘shimcha ma’lumotlar
-    if (client_info) {
-      payment['client_info'] = JSON.stringify(client_info);
-    }
-    if (payment_schedule) {
-      payment['payment_schedule'] = JSON.stringify(payment_schedule);
-    }
+    if (client_info) payment.client_info = JSON.stringify(client_info);
+    if (payment_schedule) payment.payment_schedule = JSON.stringify(payment_schedule);
 
     await this.paymentRepository.save(payment);
 
     // 🔹 To‘liq tugagan bo‘lsa faqat purchase ni tasdiqlash
-    if (status === 'completed') {
+    if (status === 'completed' && payment.purchaseId) {
       await this.purchasesService.confirmPurchase(payment.purchaseId);
     }
 
-    this.logger.log(`Dolyame webhook qayta ishladi: ${realId}, status: ${status}`);
+    this.logger.log(`Dolyame webhook qayta ishladi: ${idsToCheck.join(', ')}, status: ${status}`);
     return { ok: true, paymentId: payment.id, status };
-
-  } catch (error) {
+  } catch (error: any) {
     this.logger.error(`Webhook qayta ishlashda xato: ${error.message}`, error.stack);
     throw new HttpException('Webhook qayta ishlashda xato', HttpStatus.INTERNAL_SERVER_ERROR);
   }
