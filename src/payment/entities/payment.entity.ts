@@ -11,10 +11,10 @@ export class Payment {
   amount: number;
 
   @Column({ type: 'varchar', nullable: true })
-  transactionId: string | null; // Tashqi to'lov tizimidan kelgan ID
+  transactionId: string | null;
 
   @Column({ type: 'varchar', nullable: true })
-  providerOperationId: string; // Ichki generatsiya qilingan ID
+  providerOperationId: string;
 
   @Column()
   status: string;

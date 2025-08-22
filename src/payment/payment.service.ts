@@ -527,9 +527,9 @@ export class PaymentsService {
   }
 
   async handleDolyameWebhook(@Body() body: any, @Req() req: any) {
-  this.logger.log(`Webhook raw body type: ${typeof body}, data: ${JSON.stringify(body)}`);
+  this.logger.log(`Dolyame webhook raw: ${typeof body}, data: ${JSON.stringify(body)}`);
 
-  // 🔹 Ba’zi hollarda body string bo‘lib keladi, uni JSON.parse qilamiz
+  // 🔹 String bo‘lsa JSON.parse qilamiz
   if (typeof body === 'string') {
     try {
       body = JSON.parse(body);
@@ -543,15 +543,18 @@ export class PaymentsService {
   const { id, payment_id, status, amount, residual_amount, client_info, payment_schedule } = body;
   const realId = (id || payment_id) ? String(id || payment_id) : null;
 
-  // 🔹 Majburiy maydonlar tekshiruvi
   if (!realId || !status) {
-    this.logger.warn(`Noto'g'ri webhook ma'lumotlari: ${JSON.stringify(body)}`);
+    this.logger.warn(`Noto‘g‘ri webhook ma’lumotlari: ${JSON.stringify(body)}`);
     throw new HttpException('Notogri webhook malumotlari', HttpStatus.BAD_REQUEST);
   }
 
-  // 🔹 DB’dan transactionId orqali paymentni topamiz
+  // 🔹 DB’dan paymentni qidiramiz (id ham, payment_id ham tekshiramiz)
   const payment = await this.paymentRepository.findOne({
-    where: { transactionId: realId, provider: 'dolyame' },
+    where: [
+      { transactionId: realId, provider: 'dolyame' },
+      { providerOperationId: realId, provider: 'dolyame' },
+      { id: Number(realId), provider: 'dolyame' }, // agar DB id bo‘lsa
+    ],
     relations: ['purchase'],
   });
 
@@ -560,7 +563,7 @@ export class PaymentsService {
     return { ok: true, error: `Payment topilmadi: ${realId}` };
   }
 
-  // 🔹 Ruxsat etilgan statuslar ro‘yxati
+  // 🔹 Ruxsat etilgan statuslar
   const validStatuses = [
     'approved',
     'rejected',
@@ -571,15 +574,20 @@ export class PaymentsService {
   ];
 
   if (!validStatuses.includes(status)) {
-    this.logger.warn(`Noto'g'ri status: ${status}`);
+    this.logger.warn(`Noto‘g‘ri status: ${status}`);
     throw new HttpException('Notogri status', HttpStatus.BAD_REQUEST);
   }
 
   try {
     // 🔹 Status mapping
-    payment.status = (status === 'rejected' || status === 'canceled') ? 'failed' : status;
+    payment.status =
+      status === 'rejected' || status === 'canceled'
+        ? 'failed'
+        : status === 'approved' || status === 'committed' || status === 'wait_for_commit'
+        ? 'pending'
+        : status;
 
-    // 🔹 Summalarni yozib qo‘yamiz
+    // 🔹 Summalar
     if (amount !== undefined) {
       payment.amount = Number(amount);
     }
@@ -587,7 +595,7 @@ export class PaymentsService {
       payment['residual_amount'] = Number(residual_amount);
     }
 
-    // 🔹 Qo‘shimcha ma’lumotlarni yozib qo‘yamiz
+    // 🔹 Qo‘shimcha ma’lumotlar
     if (client_info) {
       payment['client_info'] = JSON.stringify(client_info);
     }
@@ -597,28 +605,17 @@ export class PaymentsService {
 
     await this.paymentRepository.save(payment);
 
-    // 🔹 Agar payment to‘liq yakunlangan bo‘lsa – purchase ni tasdiqlaymiz va chek yuboramiz
+    // 🔹 To‘liq tugagan bo‘lsa faqat purchase ni tasdiqlash
     if (status === 'completed') {
       await this.purchasesService.confirmPurchase(payment.purchaseId);
-
-      const digitalKassaResult = await this.sendReceiptToDigitalKassa(
-        payment,
-        'full_payment',
-        false,
-        payment.receiptId,
-      );
-
-      if (!digitalKassaResult.ok) {
-        this.logger.warn(`Digital Kassa xatosi: ${digitalKassaResult.error}`);
-      }
     }
 
-    this.logger.log(`Webhook muvaffaqiyatli qayta ishlandi: ${realId}, status: ${status}`);
-    return { ok: true, paymentId: realId };
+    this.logger.log(`Dolyame webhook qayta ishladi: ${realId}, status: ${status}`);
+    return { ok: true, paymentId: payment.id, status };
 
   } catch (error) {
-    this.logger.error(`Webhookni qayta ishlashda xato: ${error.message}`, error.stack);
-    throw new HttpException('Webhookni qayta ishlashda xato', HttpStatus.INTERNAL_SERVER_ERROR);
+    this.logger.error(`Webhook qayta ishlashda xato: ${error.message}`, error.stack);
+    throw new HttpException('Webhook qayta ishlashda xato', HttpStatus.INTERNAL_SERVER_ERROR);
   }
 }
 
