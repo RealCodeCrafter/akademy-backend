@@ -11,12 +11,10 @@ export class Payment {
   amount: number;
 
   @Column({ type: 'varchar', nullable: true })
-  // Tashqi to'lov tizimidan kelgan ID (masalan, Tochka operationId yoki Dolyame payment_id)
-  transactionId: string | null;
+  transactionId: string | null; // Tashqi to'lov tizimidan kelgan ID
 
   @Column({ type: 'varchar', nullable: true })
-  // Ichki generatsiya qilingan ID (masalan, txn_...)
-  providerOperationId: string;
+  providerOperationId: string; // Ichki generatsiya qilingan ID
 
   @Column()
   status: string;
@@ -27,7 +25,7 @@ export class Payment {
   @Column({ nullable: true })
   description: string;
 
-  @ManyToOne(() => User, (user) => user.payments)
+  @ManyToOne(() => User, (user) => user.payments, { onDelete: 'CASCADE' })
   user: User;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
@@ -36,21 +34,18 @@ export class Payment {
   @Column({ nullable: true })
   purchaseId: number;
 
-  @ManyToOne(() => Purchase, (purchase) => purchase.payments, { nullable: true })
+  @ManyToOne(() => Purchase, (purchase) => purchase.payments, { nullable: true, onDelete: 'CASCADE' })
   purchase: Purchase;
 
   @Column({ nullable: true })
   receiptId: string;
 
   @Column({ type: 'float', nullable: true })
-  // Dolyame uchun qolgan to'lov summasi
-  residual_amount: number;
+  residual_amount: number; // Dolyame uchun qolgan to'lov summasi
 
   @Column({ type: 'json', nullable: true })
-  // Dolyame webhookdan kelgan mijoz ma'lumotlari
-  client_info: string;
+  client_info: string; // Dolyame webhookdan kelgan mijoz ma'lumotlari
 
   @Column({ type: 'json', nullable: true })
-  // Dolyame webhookdan kelgan to'lov jadvali
-  payment_schedule: string;
+  payment_schedule: string; // Dolyame webhookdan kelgan to'lov jadvali
 }
