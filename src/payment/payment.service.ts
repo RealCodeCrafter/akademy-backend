@@ -266,7 +266,7 @@ export class PaymentsService {
           };
         }
 
-        savedPayment.transactionId = orderId; // Webhook'da orderId ishlatiladi
+        savedPayment.transactionId = orderId;
         savedPayment.providerOperationId = orderId;
         try {
           await this.paymentRepository.save(savedPayment);
@@ -319,11 +319,11 @@ export class PaymentsService {
         `${dolyameApiUrl}/orders/${orderId}/commit`,
         {
           id: orderId,
-          amount: Number(amount.toFixed(2)), // Rubl sifatida
+          amount: Number(amount.toFixed(2)),
           prepaid_amount: 0,
           items: items.map(item => ({
             ...item,
-            price: Number(item.price.toFixed(2)), // Rubl sifatida
+            price: Number(item.price.toFixed(2)),
           })),
           fiscalization_settings: {
             type: 'disabled',
@@ -411,11 +411,11 @@ export class PaymentsService {
       const response = await axios.post(
         `${dolyameApiUrl}/orders/${orderId}/refund`,
         {
-          amount: Number(amount.toFixed(2)), // Rubl sifatida
+          amount: Number(amount.toFixed(2)), 
           refunded_prepaid_amount: 0,
           returned_items: items.map(item => ({
             ...item,
-            price: Number(item.price.toFixed(2)), // Rubl sifatida
+            price: Number(item.price.toFixed(2)),
           })),
         },
         {
@@ -500,11 +500,11 @@ export class PaymentsService {
         {
           order: {
             id: orderId,
-            amount: Number(amount.toFixed(2)), // Rubl sifatida
+            amount: Number(amount.toFixed(2)),
             prepaid_amount: 0,
             items: items.map(item => ({
               ...item,
-              price: Number(item.price.toFixed(2)), // Rubl sifatida
+              price: Number(item.price.toFixed(2)),
             })),
           },
         },
@@ -528,8 +528,6 @@ export class PaymentsService {
   
   async handleDolyameWebhook(@Body() body: any, @Req() req: any) {
   this.logger.log(`Dolyame webhook raw: ${typeof body}, data: ${JSON.stringify(body)}`);
-
-  // 🔹 String bo‘lsa JSON.parse qilamiz
   if (typeof body === 'string') {
     try {
       body = JSON.parse(body);
@@ -539,10 +537,7 @@ export class PaymentsService {
     }
   }
 
-  // 🔹 Kerakli maydonlarni ajratib olamiz
   const { id, payment_id, status, amount, residual_amount, client_info, payment_schedule } = body;
-
-  // 🔹 ID yoki payment_id har qanday formatda string va number bo‘lishi mumkin
   const idsToCheck = [id, payment_id].filter(Boolean);
 
   if (!idsToCheck.length || !status) {
@@ -552,7 +547,6 @@ export class PaymentsService {
 
   let payment: Payment | null = null;
 
-  // 🔹 DB’dan id va payment_id bo‘yicha qidiramiz
   for (const realId of idsToCheck) {
     payment = await this.paymentRepository.findOne({
       where: [
@@ -571,7 +565,6 @@ export class PaymentsService {
     return { ok: true, error: `Payment topilmadi: ${idsToCheck.join(', ')}` };
   }
 
-  // 🔹 Ruxsat etilgan statuslar
   const validStatuses = [
     'approved',
     'rejected',
@@ -587,25 +580,20 @@ export class PaymentsService {
   }
 
   try {
-    // 🔹 Status mapping
     payment.status =
       status === 'rejected' || status === 'canceled'
         ? 'failed'
         : status === 'approved' || status === 'committed' || status === 'wait_for_commit'
         ? 'pending'
         : status;
-
-    // 🔹 Summalar
     if (amount !== undefined) payment.amount = Number(amount);
     if (residual_amount !== undefined) payment.residual_amount = Number(residual_amount);
 
-    // 🔹 Qo‘shimcha ma’lumotlar
     if (client_info) payment.client_info = JSON.stringify(client_info);
     if (payment_schedule) payment.payment_schedule = JSON.stringify(payment_schedule);
 
     await this.paymentRepository.save(payment);
 
-    // 🔹 To‘liq tugagan bo‘lsa faqat purchase ni tasdiqlash
     if (status === 'completed' && payment.purchaseId) {
       await this.purchasesService.confirmPurchase(payment.purchaseId);
     }
@@ -679,10 +667,6 @@ export class PaymentsService {
         payment.status = 'completed';
         await this.paymentRepository.save(payment);
         await this.purchasesService.confirmPurchase(payment.purchaseId);
-        const digitalKassaResult = await this.sendReceiptToDigitalKassa(payment, 'full_payment', false, payment.receiptId);
-        if (!digitalKassaResult.ok) {
-          this.logger.warn(`Digital Kassa xatosi: ${digitalKassaResult.error}`);
-        }
         break;
       case 'DECLINED':
         payment.status = 'failed';
@@ -733,124 +717,6 @@ export class PaymentsService {
     } catch (e) {
       this.logger.warn(`IP tekshirishda xato: ${ip}`, e.stack);
       return false;
-    }
-  }
-
-  async sendReceiptToDigitalKassa(
-    payment: Payment,
-    paymentMethod: 'full_payment' | 'full_prepayment',
-    isRefund = false,
-    receiptId: string,
-  ) {
-    try {
-      const apiUrl = this.configService.get<string>('DIGITAL_KASSA_API_URL') || 'https://api.digitalkassa.ru/v2.1';
-      const groupId = Number(this.configService.get<string>('DIGITAL_KASSA_GROUP_ID') || 3190);
-      const actor = this.configService.get<string>('DIGITAL_KASSA_ACTOR') || 'Malakhova_A_S';
-      const token = this.configService.get<string>('DIGITAL_KASSA_TOKEN') || '07uJ=$!nPFmUT9n68b2*';
-      const taxation = Number(this.configService.get<string>('DIGITAL_KASSA_TAXATION') || 16);
-      const vatCode = Number(this.configService.get<string>('DIGITAL_KASSA_VAT') || 0);
-      const unitCode = Number(this.configService.get<string>('DIGITAL_KASSA_UNIT') || 0);
-      const kktAddress = this.configService.get<string>('DIGITAL_KASSA_KKT_ADDRESS') || 'г. Брянск, ул. Крахмалёва, д.55';
-      const kktPlace = this.configService.get<string>('DIGITAL_KASSA_KKT_PLACE') || 'A+ ACADEMY';
-      const kktAutomatic = this.configService.get<string>('DIGITAL_KASSA_KKT_AUTOMATIC') === 'true';
-      const deviceNumber = this.configService.get<string>('DIGITAL_KASSA_DEVICE_NUMBER') || '';
-
-      const validTaxations = [1, 2, 4, 16, 32];
-      if (!validTaxations.includes(taxation)) {
-        this.logger.warn(`Noto'g'ri taxation qiymati: ${taxation}. Ruxsat etilgan qiymatlar: ${validTaxations.join(', ')}`);
-      }
-
-      if (!groupId || !actor || !token) {
-        this.logger.warn('DigitalKassa konfiguratsiyasi to‘liq emas');
-        return { ok: false, error: 'DigitalKassa konfiguratsiyasi to‘liq emas', receiptId };
-      }
-
-      const endpoint = isRefund
-        ? `/c_groups/${groupId}/receipts/correction/${receiptId}`
-        : `/c_groups/${groupId}/receipts/${receiptId}`;
-
-      const cleanDescription = (payment.description || `Order #${payment.id}`)
-        .replace(/[«»]/g, '"')
-        .replace(/[^\x00-\x7FА-Яа-яЁё0-9.,;:\-'"() ]/g, '')
-        .substring(0, 128);
-
-      const round2 = (n: number) => Number(n.toFixed(2)); // Rubl sifatida
-      const amount2 = round2(Number(payment.amount || 0));
-
-      const paymentMethodCode = paymentMethod === 'full_prepayment' ? 1 : 4;
-
-      const notifyPhone = payment.user?.parentPhone || this.configService.get<string>('DIGITAL_KASSA_TEST_PHONE') || '+79999999999';
-      const notifyEmails = [payment.user?.email || this.configService.get<string>('DIGITAL_KASSA_TEST_EMAIL') || 'test@example.com'];
-
-      const item = {
-        type: 1,
-        name: cleanDescription,
-        price: amount2,
-        quantity: 1,
-        amount: amount2,
-        payment_method: paymentMethodCode,
-        vat: vatCode,
-        unit: unitCode,
-        payment_object: 13,
-      };
-
-      const common = {
-        type: isRefund ? 3 : 1,
-        items: [item],
-        taxation,
-        amount: {
-          cash: isRefund ? 0 : 0,
-          cashless: isRefund ? amount2 : amount2,
-          prepayment: 0,
-          postpayment: 0,
-          barter: 0,
-        },
-        notify: { emails: notifyEmails, phone: notifyPhone },
-        customer: { tin: '', name: payment.user?.parentName || 'Client' },
-        additional_attribute: { name: 'Order ID', value: String(payment.id) },
-        loc: {
-          billing_place: this.configService.get<string>('PUBLIC_SITE_URL') || 'https://aplusacademy.ru',
-          address: kktAddress,
-          place: kktPlace,
-          ...(deviceNumber && { device_number: deviceNumber }),
-        },
-      };
-
-      if (isRefund) {
-        common['corrected_date'] = new Date().toLocaleDateString('ru-RU', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        });
-        common['order_number'] = '';
-      }
-
-      if (!kktAutomatic) {
-        common['cashier'] = { tin: '', name: '' };
-      }
-
-      const axiosConfig = {
-        headers: {
-          'Content-Type': 'application/json; charset=utf-8',
-          Authorization: `Basic ${Buffer.from(`${actor}:${token}`).toString('base64')}`,
-        },
-        timeout: 15000,
-      };
-
-      this.logger.log(`DigitalKassa so'rov tanasi: ${JSON.stringify(common)}`);
-
-      try {
-        const resp = await axios.post(`${apiUrl}${endpoint}`, common, axiosConfig);
-        this.logger.log(`DigitalKassa chek OK: ${JSON.stringify(resp.data)}`);
-        return { ok: true, data: resp.data, receiptId };
-      } catch (err: any) {
-        const errorDetails = err.response?.data ?? err.message ?? String(err);
-        this.logger.error(`DigitalKassa xatosi: ${JSON.stringify(errorDetails)}`);
-        return { ok: false, receiptId, error: `DigitalKassa xatosi: ${errorDetails}` };
-      }
-    } catch (outer: any) {
-      this.logger.error(`sendReceiptToDigitalKassa fatal: ${outer?.message || outer}`);
-      return { ok: false, error: `sendReceiptToDigitalKassa fatal: ${outer?.message || outer}`, receiptId };
     }
   }
 }
