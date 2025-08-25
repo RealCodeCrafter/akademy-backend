@@ -18,6 +18,7 @@ export class PaymentsController {
     const userId = req.user?.sub;
     if (!userId) throw new HttpException('Foydalanuvchi aniqlanmadi', HttpStatus.UNAUTHORIZED);
     return this.paymentsService.startPayment(createPaymentDto, userId);
+    
   }
 
   @UseGuards(AuthGuard)
